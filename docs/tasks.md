@@ -25,7 +25,11 @@ looks like.
       correct answer for each answerable question
 - [ ] Spot-check a few of those correct answers by hand
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`
-- [ ] Run the tests — confirm they fail (the tools don't exist yet)
+- [ ] Write `tests/test_agent_answers.py` — checks the fallback and error
+      answers use the exact fixed wording from `docs/spec.md`'s outcome
+      table
+- [ ] Run the tests — confirm they fail (the tools and agent don't exist
+      yet)
 - [ ] Commit, push, open PR (base `phase-1-spec`)
 
 ## Phase 3 — Build it (`phase-3-implement`, base: `phase-2-tdd`)
@@ -38,9 +42,10 @@ looks like.
 - [ ] Write `scripts/graph_tool.py` — get its tests passing
 - [ ] Try a real count by hand
 - [ ] Write `scripts/agent.py`
+- [ ] `pytest tests/test_agent_answers.py` — all pass
 - [ ] Run the example question end-to-end — confirm a valid answer
 - [ ] Run a deliberately unanswerable question — confirm it short-circuits
-      correctly
+      and the answer matches the fixed "nothing found" wording exactly
 - [ ] Confirm every step of a run is traced, with token counts on the
       answer-writing step
 - [ ] Write `scripts/logging_utils.py` and wire it in

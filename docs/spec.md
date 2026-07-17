@@ -202,9 +202,12 @@ Not part of this block:
 - The evaluation's "correct" counts depend on whatever the search service
   currently returns. If that service's behavior changes later, the
   correct answers may need to be recalculated.
-- The `caveat` field is written by the language model — nothing
-  automatically double-checks that its wording is accurate, only that it
-  exists when it's supposed to.
+- Only the full-success case's `answer` is freely written, by the
+  language model, describing the real counts. Nothing automatically
+  checks that this write-up is worded accurately — the evaluation only
+  checks the underlying patient list and counts it's built from, not the
+  sentence itself. Every other outcome uses the fixed wording in the
+  table above, so there's nothing to double-check there.
 - Running the test suite in CI requires both the search service and the
   graph database to be reachable there — how exactly that's set up is
   decided during planning, not in this document.

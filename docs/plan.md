@@ -22,6 +22,7 @@ evaluation itself works locally.
 | `data/eval/tasks.json` | the fixed set of test questions |
 | `scripts/build_eval_answer_key.py` | works out the correct answer for each test question, once, ahead of time |
 | `tests/test_rag_tool.py`, `tests/test_graph_tool.py` | tests for each tool, written before the tool exists |
+| `tests/test_agent_answers.py` | tests that the fallback and error answers use the exact fixed wording from `docs/spec.md`'s outcome table, without needing the real search service or graph database |
 | `scripts/rag_tool.py` | semantic search tool |
 | `scripts/graph_tool.py` | exact drug count tool |
 | `scripts/agent.py` | the agent itself — the steps described in `docs/spec.md`'s Agent steps section |
@@ -36,7 +37,10 @@ evaluation itself works locally.
   not during the spec/plan/tasks step — there's no code to run yet at that
   point.
 - Tool tests are written and confirmed failing before each tool is built.
-  This proves the test would actually catch a missing or broken tool.
+  This proves the test would actually catch a missing or broken tool. The
+  fallback/error wording test is written the same way, before the agent
+  exists, since that wording is fixed and doesn't depend on a real tool
+  call to check.
 - The evaluation runner calls the real agent, not the tools directly —
   since one of the three things it checks is whether the final answer
   object is valid, which only exists once the whole agent runs.
