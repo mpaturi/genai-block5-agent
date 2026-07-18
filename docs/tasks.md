@@ -32,7 +32,11 @@ looks like.
       `data/eval/answer_key.json`: the correct patient list, drug count,
       and expected `confidence` (from the same rule in `docs/spec.md`'s
       Structured output section) for each answerable question, keyed by
-      the same question ID
+      the same question ID. Call the search service with the same
+      stripped, drug-names-removed question text the real agent will use
+      (see `docs/spec.md`'s What the agent does) — not the full question —
+      so the golden patient list matches what the agent will actually
+      produce
 - [ ] Spot-check a few entries in `data/eval/answer_key.json` by hand,
       including the expected `confidence` value
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`

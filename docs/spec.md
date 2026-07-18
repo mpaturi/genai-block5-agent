@@ -66,12 +66,26 @@ below} {value}`, how many are on `{drug A}` vs. `{drug B}`?"
 Lisinopril vs. Amlodipine?"
 
 Three steps:
-1. Send the question to the RAG service. It returns a list of matching
-   patients.
+1. Strip the two drug names out of the question, keeping only the
+   condition-and-lab part (e.g. "patients with hypertension and SBP >
+   140"), and send that stripped version to the RAG service. It returns a
+   list of matching patients. The full original question, drug names
+   included, is kept by the agent for step 3 — it's only the text sent to
+   RAG that leaves the drug names out.
 2. Send that patient list to the graph. It returns an exact count of how
    many of those patients are on each drug.
 3. Combine both results into one structured answer, with a plain-English
    summary and a note on how much to trust the count.
+
+**Why the drug names are stripped before searching:** if the full
+question (drug names included) were sent to RAG, its semantic search
+would naturally favor patients whose records already mention those two
+drugs — quietly biasing the found patient set toward people already on
+one of them. That would undercut the whole point of the graph step,
+which exists specifically to give an exact count that can include
+patients on neither named drug. Stripping the drug names keeps RAG's job
+limited to what it's actually suited for — matching on condition and lab
+values — and leaves the drug comparison to the graph's exact count.
 
 **Important honesty point:** the RAG service does not find every matching
 patient — it only returns a handful of likely matches. So the graph's
@@ -83,11 +97,12 @@ matters (see Structured output, `caveat` field).
 count for every drug the checked patients are on, not just the two named
 in the question. Matching "Lisinopril" and "Amlodipine" (or whichever two
 drugs the question named) against that full list happens during the
-answer-writing step — it reads the original question and picks out the
-matching rows by name. A patient can be on both named drugs, on neither,
-or on some other drug entirely, so the two counts are not guaranteed to
-add up to the total number of patients checked — the write-up should not
-assume they do.
+answer-writing step — it reads the full original question (the version
+with drug names still in it, not the stripped version sent to RAG in
+step 1) and picks out the matching rows by name. A patient can be on both
+named drugs, on neither, or on some other drug entirely, so the two
+counts are not guaranteed to add up to the total number of patients
+checked — the write-up should not assume they do.
 
 ## Tools
 
@@ -103,6 +118,14 @@ nothing matched.
 | Output (match) | a short prose answer, a list of matching patients, how many were found |
 | Output (no match) | an explicit "nothing found" result — not an error |
 | Output (failure) | a clear error, distinguishing "service down" from "bad input" |
+
+The question this tool receives is the stripped, drug-names-removed
+version described in What the agent does — never the full original
+question. The agent always calls this tool at its default of 5 results;
+it never overrides that number. This isn't optional: the confidence
+tiers (see Structured output) are calibrated specifically against 5
+being the normal number of patients found, so a different number here
+would silently throw off what "high confidence" is supposed to mean.
 
 The agent does not retry inside the tool itself — retries happen at the
 agent level (see Agent steps).
@@ -136,6 +159,14 @@ match check on `graph_result` (see Evaluation): two runs that found the
 same counts always compare equal, regardless of what order the graph
 happened to return them in.
 
+"How many patients were checked" always means the number of IDs in the
+input list — not the number that turned out to match a node in the
+graph. A patient ID that doesn't match anything still counts as
+checked; it just contributes zero to every drug's count. This is the one
+number the confidence rule (see Structured output) is based on, so it
+needs a single, fixed meaning — it is never recomputed a second way
+anywhere else in the agent.
+
 Before running the query, the tool checks that every ID in the list is a
 whole, positive number. If any aren't, it fails immediately with a clear
 error, rather than sending bad data to the graph.
@@ -160,6 +191,14 @@ Every run returns one answer object with these fields:
 | `graph_result` | the exact count result from the graph step |
 | `confidence` | `high`, `medium`, or `low` |
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
+
+The final answer object has no separate field for "how many patients
+were checked" (see Tool 2) — it is never shown on its own. It only ever
+feeds the `confidence` rule below; anyone reading the answer sees its
+effect through `confidence` and `caveat`, and can also count the entries
+in `rag_patient_ids` directly, since that always has the same length as
+the number checked (the agent always sends every ID it found straight
+to Tool 2, without dropping any).
 
 Not all fields come from the same place. `question`, `rag_patient_ids`,
 and `graph_result` are always filled in directly by the agent's own code,
