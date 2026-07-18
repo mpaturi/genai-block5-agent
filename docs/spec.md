@@ -128,6 +128,13 @@ changes it.
 | Output (empty input) | returns immediately with nothing to count — no query is run |
 | Output (failure) | a clear error naming what went wrong |
 
+The per-drug counts are given back as a mapping from drug name to count
+(like a lookup table), not an ordered list — so there's nothing about
+their order to ever disagree on. This matters for the evaluation's exact
+match check on `graph_result` (see Evaluation): two runs that found the
+same counts always compare equal, regardless of what order the graph
+happened to return them in.
+
 Before running the query, the tool checks that every ID in the list is a
 whole, positive number. If any aren't, it fails immediately with a clear
 error, rather than sending bad data to the graph.
@@ -248,13 +255,19 @@ directly, without writing any new prose. Step 4 is the only step that
 composes new text, and it's only attempted when both tools actually
 succeeded.
 
-The agent is built so both tools can be swapped out — the real ones are
-used by default, but a test can substitute a fake version that always
-fails, or always returns a specific result, instead. This is what makes
-it possible to trigger the search-broken, graph-broken, and
-answer-step-failed paths on purpose in `tests/test_agent_answers.py` (see
-plan.md), and check their exact wording, without needing the real search
-service, the real graph, or a real outage to actually happen.
+The agent is built so both tools, and the language model call in step 4,
+can all be swapped out — the real ones are used by default, but a test
+can substitute a fake version that always fails, always returns a
+specific result, or always returns a specific (or unparseable) piece of
+text, instead. Swapping a tool is what makes it possible to trigger the
+search-broken and graph-broken paths on purpose; swapping the model call
+is what makes it possible to trigger the answer-step-failed path the same
+way — a fake that returns unusable text is how that specific case gets
+tested, since neither tool failing has anything to do with that path.
+This is what lets `tests/test_agent_answers.py` (see plan.md) check the
+exact wording for all three of these paths without needing the real
+search service, the real graph, a real outage, or a real, costly,
+non-deterministic call to the language model.
 
 ## Tracing and logging
 
