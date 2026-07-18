@@ -38,9 +38,10 @@ evaluation itself works locally.
   point.
 - Tool tests are written and confirmed failing before each tool is built.
   This proves the test would actually catch a missing or broken tool. The
-  fallback/error wording test is written the same way, before the agent
-  exists, since that wording is fixed and doesn't depend on a real tool
-  call to check.
+  test covering all four fixed-wording answers (nothing found, search
+  broken, graph broken, answer step failed) is written the same way,
+  before the agent exists, since that wording is fixed and doesn't depend
+  on a real tool call to check.
 - The evaluation runner calls the real agent, not the tools directly —
   since one of the three things it checks is whether the final answer
   object is valid, which only exists once the whole agent runs.

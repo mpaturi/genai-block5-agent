@@ -153,6 +153,15 @@ Every run returns one answer object with these fields:
 | `confidence` | `high`, `medium`, or `low` |
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
 
+Not all fields come from the same place. `question`, `rag_patient_ids`,
+and `graph_result` are filled in directly by the agent's own code, copied
+straight from what steps 1–3 already found — the language model never
+generates these, so there's nothing about them that can come back
+malformed. Only `answer`, `confidence`, and `caveat` are written by the
+language model, in step 4, and only that part can fail to come back
+correctly formed (see Agent steps and the "Answer step failed" row
+below).
+
 Rules for filling these in:
 - `confidence` is `low` whenever the graph step didn't run, the graph step
   failed, or the answer-writing step itself failed.
@@ -220,10 +229,16 @@ succeeded.
 - The step that writes the final answer also records how many words
   ("tokens") it used, since it's the only step that uses a language model.
 - Every run is logged with: the question, time spent per step, tokens
-  used, an estimated cost in dollars, and the outcome (answered, nothing
-  found, or a tool failure). These logs are written to `data/logs/runs.jsonl`,
-  one line per run. This file is generated output, not source code, so it
-  isn't committed to the repo.
+  used, an estimated cost in dollars, the outcome (answered, nothing
+  found, or a tool failure), and whether the count step actually ran.
+  These logs are written to `data/logs/runs.jsonl`, one line per run.
+  This file is generated output, not source code, so it isn't committed
+  to the repo.
+- That last item — whether the count step ran — is what the evaluation
+  uses to check tool-call correctness (see Evaluation). It's recorded
+  directly, not guessed from the shape of the final answer, since a bug
+  that calls the count step when it shouldn't, but then discards the
+  result, could otherwise still produce an answer that looks correct.
 - The exact dollar-rate used to estimate cost needs to be checked against
   the language model provider's current published pricing when this is
   built — it isn't fixed in this document, since pricing can change over
@@ -253,7 +268,11 @@ answerable.
 
 Each test question is checked on three things:
 1. Did the agent call the right tools in the right order (skipping the
-   count step only when it should)?
+   count step only when it should)? Checked using the run log's record of
+   whether the count step ran (see Tracing and logging) — not guessed
+   from the final answer alone, since that alone can't tell the
+   difference between "the count step correctly never ran" and "the
+   count step ran but its result got lost."
 2. Is the output correctly structured (all fields present and valid)?
 3. Does the answer match the correct patient list and count exactly?
 
@@ -303,6 +322,9 @@ This block is complete when:
   non-empty result.
 - A deliberately unanswerable question correctly short-circuits to a
   fallback answer.
+- If the answer-writing step is made to fail on purpose (for a manual
+  check), the agent falls back to that case's fixed wording instead of
+  crashing or returning something invalid.
 - A full trace (all steps, with token counts on the answer-writing step)
   is visible for at least one real run.
 - A run log entry exists with cost and token counts.

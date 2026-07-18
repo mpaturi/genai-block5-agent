@@ -21,16 +21,18 @@ looks like.
 - [ ] Write `scripts/schemas.py` (the answer object and agent state)
 - [ ] Check the live graph database for its current list of conditions,
       drugs, and lab values before writing questions (see `docs/spec.md`'s
-      Evaluation section)
+      Evaluation section) — `graph_tool.py` doesn't exist yet at this
+      point, so do this with a one-off query run directly against Neo4j,
+      not through the tool
 - [ ] Write `data/eval/tasks.json` — at least 10 test questions (at least
       7 answerable, at least 3 deliberately unanswerable)
 - [ ] Write `scripts/build_eval_answer_key.py` and run it to work out the
       correct answer for each answerable question
 - [ ] Spot-check a few of those correct answers by hand
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`
-- [ ] Write `tests/test_agent_answers.py` — checks the fallback and error
-      answers use the exact fixed wording from `docs/spec.md`'s outcome
-      table
+- [ ] Write `tests/test_agent_answers.py` — checks all four fixed-wording
+      answers (nothing found, search broken, graph broken, answer step
+      failed) match `docs/spec.md`'s outcome table exactly
 - [ ] Run the tests — confirm they fail (the tools and agent don't exist
       yet)
 - [ ] Commit, push, open PR (base `phase-1-spec`)
