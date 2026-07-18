@@ -49,8 +49,12 @@ looks like.
 - [ ] Try a real search by hand
 - [ ] Write `scripts/graph_tool.py` — get its tests passing
 - [ ] Try a real count by hand
-- [ ] Write `scripts/agent.py`
+- [ ] Write `scripts/agent.py` — returns whether the count step ran
+      alongside the answer object
 - [ ] `pytest tests/test_agent_answers.py` — all pass
+- [ ] Confirm the returned "did the count step run" value is correct on
+      an answerable question (`true`) and a deliberately unanswerable one
+      (`false`) — not just that the log entry looks right
 - [ ] Run the example question end-to-end — confirm a valid answer
 - [ ] Run a deliberately unanswerable question — confirm it short-circuits
       and the answer matches the fixed "nothing found" wording exactly

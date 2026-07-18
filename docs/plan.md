@@ -25,7 +25,7 @@ evaluation itself works locally.
 | `tests/test_agent_answers.py` | tests that every fixed-wording answer (nothing found, search broken, graph broken, answer step failed) matches `docs/spec.md`'s outcome table exactly, without needing the real search service or graph database |
 | `scripts/rag_tool.py` | semantic search tool |
 | `scripts/graph_tool.py` | exact drug count tool |
-| `scripts/agent.py` | the agent itself — the steps described in `docs/spec.md`'s Agent steps section, built so the two tools and the step 4 language-model call can all be swapped for fakes in tests |
+| `scripts/agent.py` | the agent itself — the steps described in `docs/spec.md`'s Agent steps section, built so the two tools and the step 4 language-model call can all be swapped for fakes in tests; returns whether the count step ran alongside the answer object, for `run_eval.py` to read directly |
 | `scripts/logging_utils.py` | writes one log entry per run |
 | `scripts/run_eval.py`, `docs/eval_results.md` | reads `data/eval/tasks.json` and `data/eval/answer_key.json`, runs the evaluation, saves the score |
 | `.github/workflows/ci.yml` | runs tests and the evaluation on every push |

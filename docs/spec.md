@@ -280,11 +280,14 @@ non-deterministic call to the language model.
   These logs are written to `data/logs/runs.jsonl`, one line per run.
   This file is generated output, not source code, so it isn't committed
   to the repo.
-- That last item — whether the count step ran — is what the evaluation
-  uses to check tool-call correctness (see Evaluation). It's recorded
-  directly, not guessed from the shape of the final answer, since a bug
-  that calls the count step when it shouldn't, but then discards the
-  result, could otherwise still produce an answer that looks correct.
+- That last item — whether the count step ran — is also handed back
+  directly from the agent's own function, alongside the answer object
+  itself, for whatever called it. This is what the evaluation actually
+  reads to check tool-call correctness (see Evaluation) — straight from
+  the call it just made, not by going back and searching the log
+  afterward, since nothing links a specific log line to a specific
+  question. The log file still records it too, for a persistent history
+  of every run, but that's a side effect, not the evaluation's source.
 - The exact dollar-rate used to estimate cost needs to be checked against
   the language model provider's current published pricing when this is
   built — it isn't fixed in this document, since pricing can change over
@@ -332,13 +335,19 @@ answerable.
 
 Each test question is checked on three things:
 1. Did the agent call the right tools in the right order (skipping the
-   count step only when it should)? Checked using the run log's record of
-   whether the count step ran (see Tracing and logging) — not guessed
-   from the final answer alone, since that alone can't tell the
-   difference between "the count step correctly never ran" and "the
-   count step ran but its result got lost."
+   count step only when it should)? Checked using the "did the count step
+   run" value the agent's own function returns directly (see Tracing and
+   logging) — not guessed from the final answer alone, since that alone
+   can't tell the difference between "the count step correctly never ran"
+   and "the count step ran but its result got lost."
 2. Is the output correctly structured (all fields present and valid)?
-3. Does the answer match the correct patient list and count exactly?
+3. Does the answer match the correct patient list and count exactly? For
+   the answerable questions, this means looking up that question's entry
+   in `answer_key.json` and comparing against it. The deliberately
+   unanswerable questions have no entry there at all — for those, this
+   check instead confirms `rag_patient_ids` and `graph_result` both came
+   back empty, since "nothing" is the correct answer and there's no
+   golden value to look up.
 
 A question only counts as passed if all three checks pass. The overall
 score is the percentage of questions passed.
