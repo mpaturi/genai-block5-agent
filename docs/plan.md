@@ -51,4 +51,5 @@ evaluation itself works locally.
   already passes locally. Exactly how the search service, graph database,
   and language model are made reachable inside CI still needs to be
   decided at this step — see `docs/spec.md`'s Known limitations, which
-  also covers the real API cost and reduced determinism this brings.
+  also covers the real, ongoing API cost this brings (the score itself
+  stays deterministic — only cost and latency are affected).

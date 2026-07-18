@@ -351,7 +351,12 @@ Each test question is checked on three things:
    logging) — not guessed from the final answer alone, since that alone
    can't tell the difference between "the count step correctly never ran"
    and "the count step ran but its result got lost."
-2. Is the output correctly structured (all fields present and valid)?
+2. Is the output correctly structured (all fields present and valid),
+   and does `caveat` being present or empty actually match what
+   `confidence` says it should be (see Structured output's rules) — not
+   just that `caveat` is *a* valid value, but that it's non-empty
+   whenever `confidence` is `low` or `medium`, and empty when it's
+   `high`?
 3. Does the answer match the correct patient list, count, and confidence
    exactly? For the answerable questions, this means looking up that
    question's entry in `answer_key.json` (patient list, drug count, and
@@ -403,13 +408,16 @@ Not part of this block:
 - Because the evaluation calls the real language model (see Evaluation),
   every CI run that reaches the evaluation step makes real, paid calls to
   it for each answerable question — this is a real, ongoing cost of
-  running CI on every push, not a one-time setup cost. It also means the
-  evaluation is not perfectly deterministic: the model's real output can
-  occasionally vary between runs, so the "is the output correctly
-  structured" check could fail once in a while for reasons that aren't an
-  actual bug. This is an accepted tradeoff, made necessary by needing the
-  real, whole agent to run (see Notes on build order in plan.md) — not
-  something this spec attempts to eliminate.
+  running CI on every push, not a one-time setup cost, and it also adds
+  real, variable latency to every run. This is an accepted tradeoff, made
+  necessary by needing the real, whole agent to run (see Notes on build
+  order in plan.md) — not something this spec attempts to eliminate.
+  **The evaluation score itself stays fully deterministic despite this:**
+  none of the three scored dimensions ever look at the model's free-text
+  `answer` sentence, only at fields that are always code-computed (see
+  Structured output) — and any failed attempt at that sentence falls back
+  to fixed, valid wording rather than producing something broken. So the
+  model's real variability affects cost and speed, never the score.
 
 ## Success criteria
 
