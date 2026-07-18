@@ -18,25 +18,34 @@ No code this phase.
 The agent doesn't exist yet — this phase only writes down what "correct"
 looks like.
 
-- [ ] Write `scripts/schemas.py` (the answer object and agent state)
+- [ ] Write `scripts/schemas.py` (the answer object, agent state, and the
+      structured question input: `condition`, `lab`, `comparison`,
+      `value`, `drug_a`, `drug_b`)
 - [ ] Check the live graph database for its current list of conditions,
       drugs, and lab values before writing questions (see `docs/spec.md`'s
       Evaluation section) — `graph_tool.py` doesn't exist yet at this
       point, so do this with a one-off query run directly against Neo4j,
       not through the tool
 - [ ] Write `data/eval/tasks.json` — at least 10 test questions, each with
-      an ID (at least 7 answerable, at least 3 deliberately unanswerable)
+      an ID (at least 7 answerable, at least 3 deliberately unanswerable).
+      Store each question as separate `condition`, `lab`, `comparison`,
+      `value`, `drug_a`, `drug_b` fields, not one opaque string (see
+      `docs/spec.md`'s Question pattern) — derive the assembled full-text
+      question from these fields for display/logging only
 - [ ] Write `scripts/build_eval_answer_key.py` — call the live search
       service and live graph directly (not through `rag_tool.py`/
       `graph_tool.py`, which don't exist yet) — and run it to write
       `data/eval/answer_key.json`: the correct patient list, drug count,
       and expected `confidence` (from the same rule in `docs/spec.md`'s
       Structured output section) for each answerable question, keyed by
-      the same question ID. Call the search service with the same
-      stripped, drug-names-removed question text the real agent will use
-      (see `docs/spec.md`'s What the agent does) — not the full question —
+      the same question ID. Build the search-service call from the same
+      `condition`/`lab`/`comparison`/`value` fields the real agent will
+      use — never the assembled full question, never `drug_a`/`drug_b` —
       so the golden patient list matches what the agent will actually
-      produce
+      produce. Dedupe and order the raw result using Tool 1's exact rule
+      (score descending, ties broken by patient ID) before writing it, so
+      the exact-match check on `rag_patient_ids` compares against a
+      golden list built the same way the agent builds its own
 - [ ] Spot-check a few entries in `data/eval/answer_key.json` by hand,
       including the expected `confidence` value
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`

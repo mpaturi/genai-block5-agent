@@ -65,27 +65,34 @@ below} {value}`, how many are on `{drug A}` vs. `{drug B}`?"
 **Example:** "Of patients with hypertension and SBP > 140, how many are on
 Lisinopril vs. Amlodipine?"
 
+Each question is defined as separate fields — `condition`, `lab`,
+`comparison` (above/below), `value`, `drug_a`, `drug_b` — not as one
+opaque string. The sentence above is only the assembled, human-readable
+form of those fields, used for display, logging, and the `question`
+field in the structured output. Keeping the fields separate end to end
+is what makes step 1 (below) a plain lookup of which fields to use,
+instead of a text-parsing problem.
+
 Three steps:
-1. Strip the two drug names out of the question, keeping only the
-   condition-and-lab part (e.g. "patients with hypertension and SBP >
-   140"), and send that stripped version to the RAG service. It returns a
-   list of matching patients. The full original question, drug names
-   included, is kept by the agent for step 3 — it's only the text sent to
-   RAG that leaves the drug names out.
+1. Build the RAG query from the `condition`, `lab`, `comparison`, and
+   `value` fields only — never `drug_a`/`drug_b`, and never by parsing
+   the assembled question string (see Question pattern above) to guess
+   which words are drug names. Send that built query to the RAG service.
+   It returns a list of matching patients.
 2. Send that patient list to the graph. It returns an exact count of how
    many of those patients are on each drug.
 3. Combine both results into one structured answer, with a plain-English
    summary and a note on how much to trust the count.
 
-**Why the drug names are stripped before searching:** if the full
-question (drug names included) were sent to RAG, its semantic search
-would naturally favor patients whose records already mention those two
-drugs — quietly biasing the found patient set toward people already on
-one of them. That would undercut the whole point of the graph step,
-which exists specifically to give an exact count that can include
-patients on neither named drug. Stripping the drug names keeps RAG's job
-limited to what it's actually suited for — matching on condition and lab
-values — and leaves the drug comparison to the graph's exact count.
+**Why `drug_a`/`drug_b` are left out of the RAG query:** if they were
+included, RAG's semantic search would naturally favor patients whose
+records already mention those two drugs — quietly biasing the found
+patient set toward people already on one of them. That would undercut
+the whole point of the graph step, which exists specifically to give an
+exact count that can include patients on neither named drug. Leaving
+`drug_a`/`drug_b` out keeps RAG's job limited to what it's actually
+suited for — matching on condition and lab values — and leaves the drug
+comparison to the graph's exact count.
 
 **Important honesty point:** the RAG service does not find every matching
 patient — it only returns a handful of likely matches. So the graph's
@@ -95,14 +102,15 @@ matters (see Structured output, `caveat` field).
 
 **Picking out the two named drugs:** the graph step always returns a
 count for every drug the checked patients are on, not just the two named
-in the question. Matching "Lisinopril" and "Amlodipine" (or whichever two
-drugs the question named) against that full list happens during the
-answer-writing step — it reads the full original question (the version
-with drug names still in it, not the stripped version sent to RAG in
-step 1) and picks out the matching rows by name. A patient can be on both
-named drugs, on neither, or on some other drug entirely, so the two
-counts are not guaranteed to add up to the total number of patients
-checked — the write-up should not assume they do.
+in the question. Looking up `drug_a` and `drug_b` (see Question pattern)
+in that full mapping is done directly by the agent's own code, before
+the language model is ever involved — not by having the model read the
+question and figure out which two rows matter. The model's job in step 4
+is only to write a sentence describing the two counts it's handed; it
+never has to identify which drugs are the relevant ones itself. A
+patient can be on both named drugs, on neither, or on some other drug
+entirely, so the two counts are not guaranteed to add up to the total
+number of patients checked — the write-up should not assume they do.
 
 ## Tools
 
@@ -119,9 +127,10 @@ nothing matched.
 | Output (no match) | an explicit "nothing found" result — not an error |
 | Output (failure) | a clear error, distinguishing "service down" from "bad input" |
 
-The question this tool receives is the stripped, drug-names-removed
-version described in What the agent does — never the full original
-question. The agent always calls this tool at its default of 5 results;
+The question this tool receives is built directly from the `condition`,
+`lab`, `comparison`, and `value` fields (see What the agent does) —
+never the assembled full question string, and never including
+`drug_a`/`drug_b`. The agent always calls this tool at its default of 5 results;
 it never overrides that number. This isn't optional: the confidence
 tiers (see Structured output) are calibrated specifically against 5
 being the normal number of patients found, so a different number here
@@ -354,6 +363,16 @@ service and the live graph, using the same fixed graph query described in
 Tool 2 — not through `rag_tool.py`/`graph_tool.py` themselves, since
 those get built afterward and this is a one-time computation, not part
 of the shipped agent.
+
+The raw patient list that comes back from the live search service is
+deduped and ordered using the exact same rule Tool 1 uses (see Tools) —
+duplicates removed, then sorted by score descending, ties broken by
+patient ID — before it's written into `answer_key.json`. `rag_patient_ids`
+is a list, not a set, so the evaluation's exact-match check on it (see
+below) only means something if the golden list is built with the same
+ordering rule the real agent will use. Skipping this step would let a
+correct agent run fail the check purely because of list order or
+leftover duplicates, not because anything was actually wrong.
 
 These computed correct answers are written to their own file,
 `data/eval/answer_key.json` — kept separate from `data/eval/tasks.json`,
