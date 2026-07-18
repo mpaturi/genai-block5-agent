@@ -29,9 +29,12 @@ looks like.
 - [ ] Write `scripts/build_eval_answer_key.py` — call the live search
       service and live graph directly (not through `rag_tool.py`/
       `graph_tool.py`, which don't exist yet) — and run it to write
-      `data/eval/answer_key.json`, the correct answer for each answerable
-      question, keyed by the same question ID
-- [ ] Spot-check a few entries in `data/eval/answer_key.json` by hand
+      `data/eval/answer_key.json`: the correct patient list, drug count,
+      and expected `confidence` (from the same rule in `docs/spec.md`'s
+      Structured output section) for each answerable question, keyed by
+      the same question ID
+- [ ] Spot-check a few entries in `data/eval/answer_key.json` by hand,
+      including the expected `confidence` value
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`
 - [ ] Write `tests/test_agent_answers.py` — checks all four fixed-wording
       answers (nothing found, search broken, graph broken, answer step
@@ -44,7 +47,8 @@ looks like.
 
 - [ ] Set up `requirements.txt`, `.env.example`, virtual environment
 - [ ] Write `scripts/check_connection.py` — confirm the search service,
-      graph database, and language model key are all reachable
+      graph database, language model key, and tracing service are all
+      reachable
 - [ ] Write `scripts/rag_tool.py` — get its tests passing
 - [ ] Try a real search by hand
 - [ ] Write `scripts/graph_tool.py` — get its tests passing

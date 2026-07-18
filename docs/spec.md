@@ -43,7 +43,7 @@ the patients, the graph counts them.
 
 ## Configuration
 
-The agent needs to be told how to reach three things, kept out of the
+The agent needs to be told how to reach four things, kept out of the
 codebase itself, in a local, git-ignored settings file:
 
 | What | Purpose |
@@ -51,6 +51,7 @@ codebase itself, in a local, git-ignored settings file:
 | Search service address | where to send questions for semantic search |
 | Graph database address, username, password | where to run the exact drug count |
 | Language model key | authenticates the answer-writing step |
+| Tracing service key and project name | authenticates and labels traces sent to LangSmith (see Technology) |
 
 A template file listing these (with no real values filled in) is
 committed to the repo, so anyone can see what's needed without seeing the
@@ -325,6 +326,16 @@ all. Each entry in the answer key is keyed by the same question ID used
 in `tasks.json`, so `run_eval.py` can look up the right correct answer
 for each question it runs.
 
+Each answer key entry also includes the expected `confidence` — worked
+out from the golden patient count using the same rule as Structured
+output — alongside the patient list and drug count. Without this, the
+confidence rule could be implemented wrong (an off-by-one on the
+tier boundaries, for example) and nothing in this evaluation would ever
+catch it, since the patient list and drug count checks say nothing about
+whether `confidence` came out right. `caveat` doesn't need its own
+separate golden value — it's entirely determined by `confidence` and
+which step ran, both of which are already being checked.
+
 The exact list of valid conditions, drugs, and lab values already exists
 in the graph database itself, from earlier work — it isn't repeated in
 this document, since a copy here could go stale. Whoever writes the 10+
@@ -341,13 +352,14 @@ Each test question is checked on three things:
    can't tell the difference between "the count step correctly never ran"
    and "the count step ran but its result got lost."
 2. Is the output correctly structured (all fields present and valid)?
-3. Does the answer match the correct patient list and count exactly? For
-   the answerable questions, this means looking up that question's entry
-   in `answer_key.json` and comparing against it. The deliberately
-   unanswerable questions have no entry there at all — for those, this
-   check instead confirms `rag_patient_ids` and `graph_result` both came
-   back empty, since "nothing" is the correct answer and there's no
-   golden value to look up.
+3. Does the answer match the correct patient list, count, and confidence
+   exactly? For the answerable questions, this means looking up that
+   question's entry in `answer_key.json` (patient list, drug count, and
+   expected `confidence`) and comparing all three against it. The
+   deliberately unanswerable questions have no entry there at all — for
+   those, this check instead confirms `rag_patient_ids` and `graph_result`
+   both came back empty and `confidence` is `low`, since "nothing" is the
+   correct answer and there's no golden value to look up.
 
 A question only counts as passed if all three checks pass. The overall
 score is the percentage of questions passed.
@@ -380,10 +392,11 @@ Not part of this block:
   correct answers may need to be recalculated.
 - Only the full-success case's `answer` is freely written, by the
   language model, describing the real counts. Nothing automatically
-  checks that this write-up is worded accurately — the evaluation only
-  checks the underlying patient list and counts it's built from, not the
-  sentence itself. Every other outcome uses the fixed wording in the
-  table above, so there's nothing to double-check there.
+  checks that this write-up is worded accurately — the evaluation checks
+  the underlying patient list, counts, and confidence it's built from
+  (see Evaluation), but not the sentence itself. Every other outcome uses
+  the fixed wording in the table above, so there's nothing to
+  double-check there.
 - Running the test suite in CI requires both the search service and the
   graph database to be reachable there — how exactly that's set up is
   decided during planning, not in this document.

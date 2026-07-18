@@ -17,12 +17,12 @@ evaluation itself works locally.
 | File | Purpose |
 |---|---|
 | `requirements.txt`, `.env.example`, `.gitignore` | project setup — see `docs/spec.md`'s Technology and Configuration sections for what goes in each |
-| `scripts/check_connection.py` | confirms the search service, the graph database, and the language model key are all reachable |
+| `scripts/check_connection.py` | confirms the search service, the graph database, the language model key, and the tracing service are all reachable |
 | `scripts/schemas.py` | the answer object and the agent's internal state |
 | `data/eval/tasks.json` | the fixed set of test questions, each with an ID |
-| `scripts/build_eval_answer_key.py` | reads `data/eval/tasks.json` and writes `data/eval/answer_key.json` — the correct answer for each answerable question, keyed by the same question ID, worked out once, ahead of time by making its own throwaway calls straight to the live search service and live graph, since `rag_tool.py`/`graph_tool.py` don't exist yet at this point |
+| `scripts/build_eval_answer_key.py` | reads `data/eval/tasks.json` and writes `data/eval/answer_key.json` — the correct patient list, drug count, and expected `confidence` for each answerable question, keyed by the same question ID, worked out once, ahead of time by making its own throwaway calls straight to the live search service and live graph, since `rag_tool.py`/`graph_tool.py` don't exist yet at this point |
 | `tests/test_rag_tool.py`, `tests/test_graph_tool.py` | tests for each tool, written before the tool exists |
-| `tests/test_agent_answers.py` | tests that every fixed-wording answer (nothing found, search broken, graph broken, answer step failed) matches `docs/spec.md`'s outcome table exactly, without needing the real search service or graph database |
+| `tests/test_agent_answers.py` | tests that every fixed-wording answer (nothing found, search broken, graph broken, answer step failed) matches `docs/spec.md`'s outcome table exactly, without needing the real search service, graph database, or language model |
 | `scripts/rag_tool.py` | semantic search tool |
 | `scripts/graph_tool.py` | exact drug count tool |
 | `scripts/agent.py` | the agent itself — the steps described in `docs/spec.md`'s Agent steps section, built so the two tools and the step 4 language-model call can all be swapped for fakes in tests; returns whether the count step ran alongside the answer object, for `run_eval.py` to read directly |
