@@ -38,7 +38,8 @@ looks like.
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`
 - [ ] Write `tests/test_agent_answers.py` — checks all four fixed-wording
       answers (nothing found, search broken, graph broken, answer step
-      failed) match `docs/spec.md`'s outcome table exactly
+      failed) match `docs/spec.md`'s outcome table exactly, without
+      needing the real search service, graph database, or language model
 - [ ] Run the tests — confirm they fail (the tools and agent don't exist
       yet)
 - [ ] Commit, push, open PR (base `phase-1-spec`)
@@ -73,8 +74,8 @@ looks like.
 
 ## Phase 4 — CI (`phase-4-ci`, base: `phase-3-implement`)
 
-- [ ] Decide how the search service and graph database will be reachable
-      during CI runs
+- [ ] Decide how the search service, graph database, and language model
+      will be reachable during CI runs
 - [ ] Write `.github/workflows/ci.yml` — runs tests, then the evaluation;
       fails the build if the score drops below 70%
 - [ ] Push a deliberately failing test — confirm the build goes red

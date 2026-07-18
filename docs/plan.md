@@ -48,6 +48,7 @@ evaluation itself works locally.
 - Logging is wired in before the evaluation runner, so the first real
   evaluation run also produces a real log entry to sanity-check.
 - CI is the last piece added, once everything it runs (tests, evaluation)
-  already passes locally. Exactly how the search service and graph
-  database are made reachable inside CI still needs to be decided at this
-  step — see `docs/spec.md`'s Known limitations.
+  already passes locally. Exactly how the search service, graph database,
+  and language model are made reachable inside CI still needs to be
+  decided at this step — see `docs/spec.md`'s Known limitations, which
+  also covers the real API cost and reduced determinism this brings.

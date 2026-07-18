@@ -397,9 +397,19 @@ Not part of this block:
   (see Evaluation), but not the sentence itself. Every other outcome uses
   the fixed wording in the table above, so there's nothing to
   double-check there.
-- Running the test suite in CI requires both the search service and the
-  graph database to be reachable there — how exactly that's set up is
-  decided during planning, not in this document.
+- Running the test suite in CI requires the search service, the graph
+  database, and the language model to all be reachable there — how
+  exactly that's set up is decided during planning, not in this document.
+- Because the evaluation calls the real language model (see Evaluation),
+  every CI run that reaches the evaluation step makes real, paid calls to
+  it for each answerable question — this is a real, ongoing cost of
+  running CI on every push, not a one-time setup cost. It also means the
+  evaluation is not perfectly deterministic: the model's real output can
+  occasionally vary between runs, so the "is the output correctly
+  structured" check could fail once in a while for reasons that aren't an
+  actual bug. This is an accepted tradeoff, made necessary by needing the
+  real, whole agent to run (see Notes on build order in plan.md) — not
+  something this spec attempts to eliminate.
 
 ## Success criteria
 
