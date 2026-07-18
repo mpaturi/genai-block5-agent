@@ -48,7 +48,10 @@ looks like.
       golden list built the same way the agent builds its own
 - [ ] Spot-check a few entries in `data/eval/answer_key.json` by hand,
       including the expected `confidence` value
-- [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`
+- [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py` —
+      include a `test_graph_tool.py` case where one of two given drugs has
+      zero matches among the checked patients, confirming it's absent
+      from `graph_result` rather than present with a count of 0
 - [ ] Write `tests/test_agent_answers.py` — checks all four fixed-wording
       answers (nothing found, search broken, graph broken, answer step
       failed) match `docs/spec.md`'s outcome table exactly, without

@@ -107,10 +107,13 @@ in that full mapping is done directly by the agent's own code, before
 the language model is ever involved — not by having the model read the
 question and figure out which two rows matter. The model's job in step 4
 is only to write a sentence describing the two counts it's handed; it
-never has to identify which drugs are the relevant ones itself. A
-patient can be on both named drugs, on neither, or on some other drug
-entirely, so the two counts are not guaranteed to add up to the total
-number of patients checked — the write-up should not assume they do.
+never has to identify which drugs are the relevant ones itself. If
+either name isn't a key in the mapping (see Tool 2), that means 0, not a
+missing or broken result — a patient can be on both named drugs, on
+neither, or on some other drug entirely, so the two counts are not
+guaranteed to add up to the total number of patients checked, and either
+one landing at 0 is a normal outcome the write-up should handle, not
+treat as an error.
 
 ## Tools
 
@@ -167,6 +170,14 @@ their order to ever disagree on. This matters for the evaluation's exact
 match check on `graph_result` (see Evaluation): two runs that found the
 same counts always compare equal, regardless of what order the graph
 happened to return them in.
+
+The mapping only contains entries for drugs at least one checked patient
+is actually on — a drug with zero matching patients is left out of the
+mapping entirely, not included with a count of 0. Anything that looks up
+a drug in this mapping (see "Picking out the two named drugs") must treat
+a missing key as a count of 0, never as an error — since "none of the
+checked patients are on this drug" is an expected, ordinary result, not a
+failure.
 
 "How many patients were checked" always means the number of IDs in the
 input list — not the number that turned out to match a node in the
@@ -321,8 +332,17 @@ non-deterministic call to the language model.
 ## Tracing and logging
 
 - Every step of every run is traced, with how long each step took.
-- The step that writes the final answer also records how many words
-  ("tokens") it used, since it's the only step that uses a language model.
+- The step that writes the final answer records how many words ("tokens")
+  it used — this is the only language-model call this agent's own code
+  makes and controls directly. It is not the only language-model call a
+  run triggers, though: Tool 1 calls Block 4's existing `POST /query`
+  endpoint, which makes its own internal Claude call whenever it finds a
+  match (see Tool 1), to write a prose answer this agent never uses —
+  only the patient IDs are pulled out of that response. That internal
+  call happens inside Block 4's own service, so this agent has no way to
+  measure or trace its tokens directly; only its own step 4 call is
+  logged with token counts here (see Known limitations for what this
+  means for real, per-run cost).
 - Every run is logged with: the question, time spent per step, tokens
   used, an estimated cost in dollars, the outcome (answered, nothing
   found, or a tool failure), and whether the count step actually ran.
@@ -476,6 +496,17 @@ Not part of this block:
   Structured output) — and any failed attempt at that sentence falls back
   to fixed, valid wording rather than producing something broken. So the
   model's real variability affects cost and speed, never the score.
+- The real per-run language-model cost is actually higher than just the
+  step-4 answer-writing call (see Tracing and logging): Tool 1 triggers
+  its own internal Claude call inside Block 4's service on every question
+  where matches are found, to produce a prose answer this agent discards
+  and never traces or logs. So each answerable question run during
+  evaluation (and in CI) makes two real, paid language-model calls, not
+  one — only the second is visible in this agent's own logs and traces.
+  There's no cheaper endpoint on Block 4's side to call instead, since
+  this agent only has access to its already-deployed HTTP API — so this
+  is an accepted, unavoidable cost of building on top of Block 4 as-is,
+  not something this block attempts to fix.
 
 ## Success criteria
 
