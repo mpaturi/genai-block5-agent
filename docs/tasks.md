@@ -18,9 +18,11 @@ No code this phase.
 The agent doesn't exist yet — this phase only writes down what "correct"
 looks like.
 
-- [ ] Write `scripts/schemas.py` (the answer object, agent state, and the
+- [ ] Write `scripts/schemas.py` (the answer object, agent state, the
       structured question input: `condition`, `lab`, `comparison`,
-      `value`, `drug_a`, `drug_b`)
+      `value`, `drug_a`, `drug_b`, and the one shared function that
+      builds the RAG query text from `condition`/`lab`/`comparison`/
+      `value` — this is the only place that formatting logic lives)
 - [ ] Check the live graph database for its current list of conditions,
       drugs, and lab values before writing questions (see `docs/spec.md`'s
       Evaluation section) — `graph_tool.py` doesn't exist yet at this
@@ -38,10 +40,10 @@ looks like.
       `data/eval/answer_key.json`: the correct patient list, drug count,
       and expected `confidence` (from the same rule in `docs/spec.md`'s
       Structured output section) for each answerable question, keyed by
-      the same question ID. Build the search-service call from the same
-      `condition`/`lab`/`comparison`/`value` fields the real agent will
-      use — never the assembled full question, never `drug_a`/`drug_b` —
-      so the golden patient list matches what the agent will actually
+      the same question ID. Import and use the shared query-building
+      function from `scripts/schemas.py` to build the search-service call
+      — do not write a second, separate version of that formatting logic
+      — so the golden patient list matches what the agent will actually
       produce. Dedupe and order the raw result using Tool 1's exact rule
       (score descending, ties broken by patient ID) before writing it, so
       the exact-match check on `rag_patient_ids` compares against a
@@ -66,7 +68,10 @@ looks like.
 - [ ] Write `scripts/check_connection.py` — confirm the search service,
       graph database, language model key, and tracing service are all
       reachable
-- [ ] Write `scripts/rag_tool.py` — get its tests passing
+- [ ] Write `scripts/rag_tool.py` — import the shared query-building
+      function from `scripts/schemas.py` (the same one
+      `build_eval_answer_key.py` used in Phase 2) rather than writing a
+      second version of it — get its tests passing
 - [ ] Try a real search by hand
 - [ ] Write `scripts/graph_tool.py` — get its tests passing
 - [ ] Try a real count by hand

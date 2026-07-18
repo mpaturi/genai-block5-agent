@@ -133,11 +133,21 @@ nothing matched.
 The question this tool receives is built directly from the `condition`,
 `lab`, `comparison`, and `value` fields (see What the agent does) —
 never the assembled full question string, and never including
-`drug_a`/`drug_b`. The agent always calls this tool at its default of 5 results;
-it never overrides that number. This isn't optional: the confidence
-tiers (see Structured output) are calibrated specifically against 5
-being the normal number of patients found, so a different number here
-would silently throw off what "high confidence" is supposed to mean.
+`drug_a`/`drug_b`. This text is built by one shared function (see
+`scripts/schemas.py` in plan.md), not reimplemented separately anywhere
+it's needed — `rag_tool.py` and `build_eval_answer_key.py` (see
+Evaluation) both call it, so they always send RAG the exact same text
+for the same fields. Two independently written versions of this
+formatting logic could drift in wording while both still technically
+follow this rule, and since RAG's matching is semantic, that drift could
+silently change which patients come back — which is exactly the kind of
+mismatch the golden answer key is supposed to catch, not cause.
+
+The agent always calls this tool at its default of 5 results; it never
+overrides that number. This isn't optional: the confidence tiers (see
+Structured output) are calibrated specifically against 5 being the
+normal number of patients found, so a different number here would
+silently throw off what "high confidence" is supposed to mean.
 
 The agent does not retry inside the tool itself — retries happen at the
 agent level (see Agent steps).
