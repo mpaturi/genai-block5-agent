@@ -24,11 +24,14 @@ looks like.
       Evaluation section) — `graph_tool.py` doesn't exist yet at this
       point, so do this with a one-off query run directly against Neo4j,
       not through the tool
-- [ ] Write `data/eval/tasks.json` — at least 10 test questions (at least
-      7 answerable, at least 3 deliberately unanswerable)
-- [ ] Write `scripts/build_eval_answer_key.py` and run it to work out the
-      correct answer for each answerable question
-- [ ] Spot-check a few of those correct answers by hand
+- [ ] Write `data/eval/tasks.json` — at least 10 test questions, each with
+      an ID (at least 7 answerable, at least 3 deliberately unanswerable)
+- [ ] Write `scripts/build_eval_answer_key.py` — call the live search
+      service and live graph directly (not through `rag_tool.py`/
+      `graph_tool.py`, which don't exist yet) — and run it to write
+      `data/eval/answer_key.json`, the correct answer for each answerable
+      question, keyed by the same question ID
+- [ ] Spot-check a few entries in `data/eval/answer_key.json` by hand
 - [ ] Write `tests/test_rag_tool.py` and `tests/test_graph_tool.py`
 - [ ] Write `tests/test_agent_answers.py` — checks all four fixed-wording
       answers (nothing found, search broken, graph broken, answer step
@@ -69,4 +72,6 @@ looks like.
 - [ ] Push a deliberately failing test — confirm the build goes red
 - [ ] Revert it; push a deliberately poor evaluation result — confirm the
       build goes red specifically on the score check
+- [ ] Revert that too — confirm the build is back to green before
+      continuing
 - [ ] Commit, push, open PR (base `phase-3-implement`)

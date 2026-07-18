@@ -154,21 +154,34 @@ Every run returns one answer object with these fields:
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
 
 Not all fields come from the same place. `question`, `rag_patient_ids`,
-and `graph_result` are filled in directly by the agent's own code, copied
-straight from what steps 1–3 already found — the language model never
-generates these, so there's nothing about them that can come back
-malformed. Only `answer`, `confidence`, and `caveat` are written by the
-language model, in step 4, and only that part can fail to come back
-correctly formed (see Agent steps and the "Answer step failed" row
-below).
+and `graph_result` are always filled in directly by the agent's own code,
+copied straight from what steps 1–3 already found — the language model
+never generates these. `confidence` is also always computed directly by
+code, from the patient-count rule below — it's a fixed, number-based
+decision, not something that benefits from the model's judgment, so it's
+never left up to it. `caveat` works the same way as `confidence`: it's
+always fixed template text, chosen by code, based on which step failed or
+how many patients were checked — never freely written either.
+
+The only field genuinely written by the language model is `answer`, and
+only on the one path where both tools succeeded (step 4 actually runs) —
+there, it tries to write one plain-English sentence describing the
+findings. If that attempt doesn't come back as a usable sentence, even
+after one retry, the agent substitutes the fixed "Answer step failed"
+wording instead — see the outcome table below. On every other path
+(nothing found, search broken, graph broken), step 4 never runs at all,
+and `answer` is also fixed text from the outcome table.
 
 Rules for filling these in:
 - `confidence` is `low` whenever the graph step didn't run, the graph step
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
-  patients were actually checked: fewer than 3 patients is still `low`
-  (too small a group to trust), 3 to 9 patients is `medium`, and 10 or
-  more patients is `high`.
+  patients were actually checked: fewer than 3 patients is `low` (too
+  small a group to trust), 3 or 4 patients is `medium`, and 5 or more is
+  `high`. These numbers are deliberately set against the search tool's
+  default of 5 results per question (see Tool 1) — a boundary like "10 or
+  more" would make `high` confidence unreachable at the default setting,
+  which defeats the point of having the tier at all.
 - `caveat` is filled in on every `low` or `medium` result, explaining why
   — either which step failed, or that the patient group checked was small.
 - The object is always valid — there is no path through the agent that
@@ -195,6 +208,13 @@ for the last row, based on the rule above.
 
 ## Agent steps
 
+Both tools use a fixed 10-second timeout on their calls — if a call takes
+longer than that without responding, it's treated the same as an outright
+failure, and the retry rule below applies. Both the search service and
+the graph database run locally, so 10 seconds is generous enough to rule
+out "just a bit slow" while still failing fast on a real outage, rather
+than leaving a run hanging.
+
 The agent moves through a fixed sequence of steps:
 
 1. **Search** — call the semantic search tool. If it fails in a way that
@@ -216,12 +236,25 @@ The agent moves through a fixed sequence of steps:
    write-up doesn't come back correctly formed, try once more with a
    stricter instruction; if it still fails, fall back to the fixed
    wording for this case (see the outcome table above) instead of
-   returning something invalid.
+   returning something invalid. This retry budget (1 retry, 2 attempts
+   total) is smaller than steps 1 and 3's (2 retries, 3 attempts total)
+   on purpose — a tool retry is cheap and likely to succeed unchanged once
+   a brief network hiccup passes, while a retry here is a second full
+   language-model call, slower and more expensive, so it gets a smaller
+   budget rather than the same one.
 
 Steps 2 and 3's fallback/error paths produce the structured answer
 directly, without writing any new prose. Step 4 is the only step that
 composes new text, and it's only attempted when both tools actually
 succeeded.
+
+The agent is built so both tools can be swapped out — the real ones are
+used by default, but a test can substitute a fake version that always
+fails, or always returns a specific result, instead. This is what makes
+it possible to trigger the search-broken, graph-broken, and
+answer-step-failed paths on purpose in `tests/test_agent_answers.py` (see
+plan.md), and check their exact wording, without needing the real search
+service, the real graph, or a real outage to actually happen.
 
 ## Tracing and logging
 
@@ -249,14 +282,32 @@ succeeded.
 A fixed set of at least 10 test questions, written once and reused every
 time:
 - At least 7 are answerable questions, covering a mix of conditions,
-  drugs, and lab values.
+  drugs, and lab values, and a mix of how many patients typically get
+  found (so all three confidence tiers — see Structured output — actually
+  get exercised by this fixed set, not just `low`/`medium`).
 - At least 3 are deliberately unanswerable (asking about something outside
   the system's scope), to check that the agent correctly says "nothing
   found" instead of guessing.
 
 For each answerable question, the correct patient list and correct drug
-count are worked out once, ahead of time, by actually running the two
-tools for real — not typed in by hand.
+count are worked out once, ahead of time, by actually running the search
+service and the graph database for real — not typed in by hand. This
+happens before the agent's own tool wrappers exist yet (see plan.md), so
+it's done with simple, throwaway calls straight to the live search
+service and the live graph, using the same fixed graph query described in
+Tool 2 — not through `rag_tool.py`/`graph_tool.py` themselves, since
+those get built afterward and this is a one-time computation, not part
+of the shipped agent.
+
+These computed correct answers are written to their own file,
+`data/eval/answer_key.json` — kept separate from `data/eval/tasks.json`,
+which holds only the hand-written questions themselves. Keeping them
+separate makes clear which file is written by a person (the questions)
+and which is generated by a script (the correct answers), and lets the
+answer key be recomputed later without touching the questions file at
+all. Each entry in the answer key is keyed by the same question ID used
+in `tasks.json`, so `run_eval.py` can look up the right correct answer
+for each question it runs.
 
 The exact list of valid conditions, drugs, and lab values already exists
 in the graph database itself, from earlier work — it isn't repeated in
