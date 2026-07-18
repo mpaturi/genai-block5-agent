@@ -19,6 +19,9 @@ The agent doesn't exist yet — this phase only writes down what "correct"
 looks like.
 
 - [ ] Write `scripts/schemas.py` (the answer object and agent state)
+- [ ] Check the live graph database for its current list of conditions,
+      drugs, and lab values before writing questions (see `docs/spec.md`'s
+      Evaluation section)
 - [ ] Write `data/eval/tasks.json` — at least 10 test questions (at least
       7 answerable, at least 3 deliberately unanswerable)
 - [ ] Write `scripts/build_eval_answer_key.py` and run it to work out the

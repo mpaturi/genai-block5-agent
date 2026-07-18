@@ -24,6 +24,38 @@ count exactly but only for someone who already has a patient list and
 knows how to query it. This agent chains the two: semantic search finds
 the patients, the graph counts them.
 
+## Technology
+
+- Language: Python.
+- The step that writes the final answer uses Claude, specifically the
+  `claude-sonnet-4-6` model — a step up from the model the search service
+  uses, since this step has to reason across two combined results instead
+  of just describing one.
+- The agent's step-by-step flow is built with LangGraph; each run is
+  traced with LangSmith.
+- The answer object's shape (see Structured output) is enforced with
+  Pydantic.
+- The graph tool connects to Neo4j using the same driver version the
+  graph database itself was built with.
+- Tests use pytest.
+- Exact library versions get pinned once installed, during the build
+  phase — this list names what's used, not exact version numbers.
+
+## Configuration
+
+The agent needs to be told how to reach three things, kept out of the
+codebase itself, in a local, git-ignored settings file:
+
+| What | Purpose |
+|---|---|
+| Search service address | where to send questions for semantic search |
+| Graph database address, username, password | where to run the exact drug count |
+| Language model key | authenticates the answer-writing step |
+
+A template file listing these (with no real values filled in) is
+committed to the repo, so anyone can see what's needed without seeing the
+actual secrets.
+
 ## What the agent does
 
 **Question pattern:** "Of patients with `{condition}` and `{lab} {above/
@@ -46,6 +78,16 @@ count is exact, but only over the patients RAG happened to find, not
 every matching patient in the system. The agent must say so whenever that
 matters (see Structured output, `caveat` field).
 
+**Picking out the two named drugs:** the graph step always returns a
+count for every drug the checked patients are on, not just the two named
+in the question. Matching "Lisinopril" and "Amlodipine" (or whichever two
+drugs the question named) against that full list happens during the
+answer-writing step — it reads the original question and picks out the
+matching rows by name. A patient can be on both named drugs, on neither,
+or on some other drug entirely, so the two counts are not guaranteed to
+add up to the total number of patients checked — the write-up should not
+assume they do.
+
 ## Tools
 
 ### Tool 1 — semantic patient search
@@ -64,6 +106,12 @@ nothing matched.
 The agent does not retry inside the tool itself — retries happen at the
 agent level (see Agent steps).
 
+The list of matching patients used in later steps (`rag_patient_ids`) is
+built by taking the patient IDs from this result, removing duplicates (a
+patient can show up more than once if several of their records matched),
+and ordering them by match score, highest first — ties broken by patient
+ID. This makes the order the same every time, given the same input.
+
 ### Tool 2 — exact drug count
 
 Runs one fixed graph query: given a list of patient IDs, count how many
@@ -79,6 +127,10 @@ changes it.
 | Output | a count of patients on each drug, and how many patients were checked |
 | Output (empty input) | returns immediately with nothing to count — no query is run |
 | Output (failure) | a clear error naming what went wrong |
+
+Before running the query, the tool checks that every ID in the list is a
+whole, positive number. If any aren't, it fails immediately with a clear
+error, rather than sending bad data to the graph.
 
 ## When RAG finds nothing
 
@@ -102,50 +154,65 @@ Every run returns one answer object with these fields:
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
 
 Rules for filling these in:
-- When the graph step didn't run (nothing found, or a failure), or when
-  very few patients were checked, `confidence` is `low` and `caveat`
-  explains why.
-- `confidence` is only `high` when the graph step succeeded and checked a
-  reasonably sized patient group.
+- `confidence` is `low` whenever the graph step didn't run, the graph step
+  failed, or the answer-writing step itself failed.
+- When the graph step succeeded, `confidence` depends on how many
+  patients were actually checked: fewer than 3 patients is still `low`
+  (too small a group to trust), 3 to 9 patients is `medium`, and 10 or
+  more patients is `high`.
+- `caveat` is filled in on every `low` or `medium` result, explaining why
+  — either which step failed, or that the patient group checked was small.
 - The object is always valid — there is no path through the agent that
-  skips producing one.
+  skips producing one, including when the answer-writing step itself
+  fails (see the outcome table below).
 
 ### Exact wording for each outcome
 
 Only the full-success case writes a brand-new sentence — since it's the
 only case with real numbers to describe, and those numbers are different
-every time. The other three outcomes always use the same fixed wording,
-so tests can check against it exactly:
+every time. Every other outcome always uses the same fixed wording, so
+tests can check against it exactly:
 
 | Outcome | `answer` | `rag_patient_ids` / `graph_result` | `caveat` |
 |---|---|---|---|
 | Nothing found | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | both empty | "No patients were found for this question, so the drug count step was skipped." |
 | Search step broken | "I wasn't able to answer this question because the patient search step could not be completed." | both empty | "The patient search service failed after repeated attempts." |
 | Graph step broken | "Search found matching patients, but the exact drug count could not be completed." | patient list filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
-| Full success | a new sentence written by the agent, naming the counts and citing patient IDs | both filled in | none, unless very few patients were checked (see rules above) |
+| Answer step failed | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | both filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
+| Full success | a new sentence written by the agent, naming the counts and citing patient IDs | both filled in | none, unless the confidence rule above calls for one |
 
-`confidence` is `low` for the first three rows and only `high`/`medium`
-for the last row.
+`confidence` is `low` for the first four rows and `high` or `medium` only
+for the last row, based on the rule above.
 
 ## Agent steps
 
 The agent moves through a fixed sequence of steps:
 
-1. **Search** — call the semantic search tool. On a temporary failure, try
-   again (up to twice) before giving up.
+1. **Search** — call the semantic search tool. If it fails in a way that
+   looks temporary (the service is unreachable, times out, or returns an
+   unexpected server error), try again — up to 2 retries, so 3 attempts
+   in total, before giving up. A failure caused by bad input, rather than
+   a temporary problem, is not retried, since sending the same bad input
+   again won't fix it.
 2. **Decide** — if nothing was found, skip straight to a fallback answer.
-   If the search tool failed twice, skip straight to an error answer. If
-   there's a patient list, continue.
-3. **Count** — call the graph tool with that patient list. On a temporary
-   failure, try again (up to twice) before giving up. If it still fails,
-   produce an answer using only the search results, with a caveat
-   explaining the count is missing.
+   If the search tool never succeeded after all attempts, skip straight
+   to an error answer. If there's a patient list, continue.
+3. **Count** — call the graph tool with that patient list, using the same
+   retry rule as step 1 (up to 2 retries, 3 attempts total, only for
+   failures that look temporary). If it still fails, produce an answer
+   using only the search results, with a caveat explaining the count is
+   missing.
 4. **Answer** — combine both results into the structured answer described
-   above, using a plain-English write-up of the findings.
+   above, using a plain-English write-up of the findings. If this
+   write-up doesn't come back correctly formed, try once more with a
+   stricter instruction; if it still fails, fall back to the fixed
+   wording for this case (see the outcome table above) instead of
+   returning something invalid.
 
 Steps 2 and 3's fallback/error paths produce the structured answer
-directly, without writing any new prose — only step 4 needs to compose
-new text, and only when both tools actually succeeded.
+directly, without writing any new prose. Step 4 is the only step that
+composes new text, and it's only attempted when both tools actually
+succeeded.
 
 ## Tracing and logging
 
@@ -154,7 +221,13 @@ new text, and only when both tools actually succeeded.
   ("tokens") it used, since it's the only step that uses a language model.
 - Every run is logged with: the question, time spent per step, tokens
   used, an estimated cost in dollars, and the outcome (answered, nothing
-  found, or a tool failure).
+  found, or a tool failure). These logs are written to `data/logs/runs.jsonl`,
+  one line per run. This file is generated output, not source code, so it
+  isn't committed to the repo.
+- The exact dollar-rate used to estimate cost needs to be checked against
+  the language model provider's current published pricing when this is
+  built — it isn't fixed in this document, since pricing can change over
+  time.
 
 ## Evaluation
 
@@ -169,6 +242,14 @@ time:
 For each answerable question, the correct patient list and correct drug
 count are worked out once, ahead of time, by actually running the two
 tools for real — not typed in by hand.
+
+The exact list of valid conditions, drugs, and lab values already exists
+in the graph database itself, from earlier work — it isn't repeated in
+this document, since a copy here could go stale. Whoever writes the 10+
+questions should check the live graph directly for the current list,
+rather than assume one, so "deliberately out of scope" questions are
+genuinely out of scope and "answerable" questions are genuinely
+answerable.
 
 Each test question is checked on three things:
 1. Did the agent call the right tools in the right order (skipping the
@@ -196,6 +277,9 @@ Not part of this block:
   covered elsewhere; this evaluation only checks the agent's own behavior
   on top of it.
 - No login or access control on this agent.
+- This block does not expose its own web service — it's invoked directly
+  as a script, the same way you'd run any of the other pieces by hand or
+  through `scripts/run_all.py`.
 
 ## Known limitations
 

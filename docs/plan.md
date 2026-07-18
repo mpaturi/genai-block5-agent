@@ -16,13 +16,13 @@ evaluation itself works locally.
 
 | File | Purpose |
 |---|---|
-| `requirements.txt`, `.env.example`, `.gitignore` | project setup |
+| `requirements.txt`, `.env.example`, `.gitignore` | project setup — see `docs/spec.md`'s Technology and Configuration sections for what goes in each |
 | `scripts/check_connection.py` | confirms the search service, the graph database, and the language model key are all reachable |
 | `scripts/schemas.py` | the answer object and the agent's internal state |
 | `data/eval/tasks.json` | the fixed set of test questions |
 | `scripts/build_eval_answer_key.py` | works out the correct answer for each test question, once, ahead of time |
 | `tests/test_rag_tool.py`, `tests/test_graph_tool.py` | tests for each tool, written before the tool exists |
-| `tests/test_agent_answers.py` | tests that the fallback and error answers use the exact fixed wording from `docs/spec.md`'s outcome table, without needing the real search service or graph database |
+| `tests/test_agent_answers.py` | tests that every fixed-wording answer (nothing found, search broken, graph broken, answer step failed) matches `docs/spec.md`'s outcome table exactly, without needing the real search service or graph database |
 | `scripts/rag_tool.py` | semantic search tool |
 | `scripts/graph_tool.py` | exact drug count tool |
 | `scripts/agent.py` | the agent itself — the steps described in `docs/spec.md`'s Agent steps section |
