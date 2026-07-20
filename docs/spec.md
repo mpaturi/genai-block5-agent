@@ -65,6 +65,14 @@ below} {value}`, how many are on `{drug A}` vs. `{drug B}`?"
 **Example:** "Of patients with hypertension and SBP > 140, how many are on
 Lisinopril vs. Amlodipine?"
 
+**Verified against the graph's real data, not just handed to search as
+text:** the `condition` and `lab`/`comparison`/`value` criteria are not
+only used to phrase what gets sent to RAG (see step 1 below) — the graph
+step (see Tool 2) checks every RAG-returned patient against the graph's
+own stored condition and lab values and drops anyone who doesn't actually
+satisfy them, before counting drugs. The final count is never just
+"whatever RAG's fuzzy match happened to return."
+
 Each question is defined as separate fields — `condition`, `lab`,
 `comparison` (above/below), `value`, `drug_a`, `drug_b` — not as one
 opaque string. The sentence above is only the assembled, human-readable
@@ -160,17 +168,41 @@ ID. This makes the order the same every time, given the same input.
 
 ### Tool 2 — exact drug count
 
-Runs one fixed graph query: given a list of patient IDs, count how many
-of them are on each drug. It never runs an arbitrary, agent-written query
-— only this one fixed question, answered exactly. This keeps the tool
-simple, predictable, and safe (no risk of a malformed or unsafe query
-being generated on the fly). It only ever reads from the graph — it never
+Given a list of RAG-returned patient IDs, this tool now does two things,
+both via one fixed, parameterized Cypher query — never an arbitrary,
+agent-written query. First, it verifies each patient against the graph's
+own stored data: does a `HAS_CONDITION` relationship connect them to a
+`Condition` node whose `condition_name` matches the question's
+`condition`, and does their own `Patient` node's lab property
+(`latest_sbp`, `latest_bmi`, `latest_glucose`, or `latest_hba1c` —
+whichever the question's `lab` field names) satisfy the
+`comparison`/`value` asked for? Anyone who fails either check is dropped.
+Second, it counts drugs only among the patients who passed verification —
+never over the original, unverified list. This keeps the tool simple,
+predictable, and safe (no risk of a malformed or unsafe query being
+generated on the fly), and it only ever reads from the graph — it never
 changes it.
+
+**Why this verification step exists:** RAG's semantic match can return a
+patient whose record merely *mentions* the condition and a lab reading,
+without that patient actually having the condition or satisfying the
+threshold in the graph's own stored data (see "Important honesty point"
+above) — RAG's job is approximate by design. Without checking against the
+graph's real values, the "exact" drug count would still be silently built
+on top of RAG's fuzziness. Verifying first is what makes the count
+genuinely exact, not just exact-sounding.
+
+(What to call the number of patients who passed verification, versus the
+number originally handed to this tool — and how that interacts with the
+confidence tiers in Structured output — is left open for now; it's being
+resolved together with a separate confidence-tier comment on this same
+PR, in the next round, rather than naming something here that would
+likely be renamed immediately after.)
 
 | | |
 |---|---|
-| Input | a list of patient IDs |
-| Output | a count of patients on each drug, and how many patients were checked |
+| Input | a list of patient IDs, plus the question's `condition`, `lab`, `comparison`, and `value` fields (needed to verify each patient before counting) |
+| Output | a count of patients on each drug, among only the patients who passed verification |
 | Output (empty input) | returns immediately with nothing to count — no query is run |
 | Output (failure) | a clear error naming what went wrong |
 
@@ -303,11 +335,15 @@ The agent moves through a fixed sequence of steps:
 2. **Decide** — if nothing was found, skip straight to a fallback answer.
    If the search tool never succeeded after all attempts, skip straight
    to an error answer. If there's a patient list, continue.
-3. **Count** — call the graph tool with that patient list, using the same
-   retry rule as step 1 (up to 2 retries, 3 attempts total, only for
-   failures that look temporary). If it still fails, produce an answer
-   using only the search results, with a caveat explaining the count is
-   missing.
+3. **Count** — call the graph tool with that patient list and the
+   question's `condition`/`lab`/`comparison`/`value` fields. The tool
+   first verifies each patient against the graph's own stored data,
+   dropping anyone who doesn't actually satisfy the condition and lab
+   threshold, then counts drugs only among those who passed (see Tool 2)
+   — using the same retry rule as step 1 (up to 2 retries, 3 attempts
+   total, only for failures that look temporary). If it still fails,
+   produce an answer using only the search results, with a caveat
+   explaining the count is missing.
 4. **Answer** — combine both results into the structured answer described
    above, using a plain-English write-up of the findings. If this
    write-up doesn't come back correctly formed, try once more with a
