@@ -574,19 +574,30 @@ Not part of this block:
 - Running the test suite in CI requires the search service, the graph
   database, and the language model to all be reachable there — how
   exactly that's set up is decided during planning, not in this document.
-- Because the evaluation calls the real language model (see Evaluation),
-  every CI run that reaches the evaluation step makes real, paid calls to
-  it for each answerable question — this is a real, ongoing cost of
-  running CI on every push, not a one-time setup cost, and it also adds
-  real, variable latency to every run. This is an accepted tradeoff, made
-  necessary by needing the real, whole agent to run (see Notes on build
-  order in plan.md) — not something this spec attempts to eliminate.
-  **The evaluation score itself stays fully deterministic despite this:**
-  none of the three scored dimensions ever look at the model's free-text
-  `answer` sentence, only at fields that are always code-computed (see
-  Structured output) — and any failed attempt at that sentence falls back
-  to fixed, valid wording rather than producing something broken. So the
-  model's real variability affects cost and speed, never the score.
+- Proving tracing captures token counts (see Success criteria) and
+  running the scored evaluation in CI are two separate concerns with two
+  separate needs, and they should not be conflated. Proving tracing works
+  only needs one real Claude invocation, done once, not on every CI push.
+  The scored evaluation itself never needs a real Claude call at all:
+  none of the three scored dimensions — tool-call correctness, structured
+  output validity, answer accuracy (see Evaluation) — ever reads the
+  free-text `answer` sentence's actual content, only fields that are
+  always code-computed (see Structured output). So CI's evaluation run
+  can use a stub answer-writing function in place of a real Claude call,
+  removing the real, ongoing per-push API cost and variable latency a
+  real call would otherwise add on every push.
+  **The mechanism for this already exists and is already tested:**
+  `run_agent`'s `answer_fn` keyword override — the same swappable pattern
+  `tests/test_agent_answers.py` already uses for its fakes (see Agent
+  steps). This isn't a new capability, just reusing an existing one in a
+  new place, the same way `USE_RAG_FIXTURES` already reuses `search_fn`'s
+  override for the search step. **The evaluation score itself stays fully
+  deterministic either way:** a stub `answer_fn` changes nothing about
+  what the three scored dimensions actually check, since none of them
+  ever depended on the model's real variability in the first place — it
+  only removes cost and latency the scored path never actually needed.
+  (The actual wiring of a stub into `run_eval.py`'s CI path is left for a
+  later round — this is a spec-only update.)
 - The real per-run language-model cost is actually higher than just the
   step-4 answer-writing call (see Tracing and logging): Tool 1 triggers
   its own internal Claude call inside Block 4's service on every question
