@@ -216,12 +216,12 @@ graph's real values, the "exact" drug count would still be silently built
 on top of RAG's fuzziness. Verifying first is what makes the count
 genuinely exact, not just exact-sounding.
 
-(What to call the number of patients who passed verification, versus the
-number originally handed to this tool — and how that interacts with the
-confidence tiers in Structured output — is left open for now; it's being
-resolved together with a separate confidence-tier comment on this same
-PR, in the next round, rather than naming something here that would
-likely be renamed immediately after.)
+**Resolved:** "how many patients were checked" (see below, and the
+confidence-tier rule in Structured output) now means the number of
+patients who passed this verification step — not the number of IDs
+originally handed to this tool. No new field name was introduced for
+this; the existing meaning was simply tightened to the verified count,
+consistently, everywhere it's used.
 
 | | |
 |---|---|
@@ -245,10 +245,12 @@ a missing key as a count of 0, never as an error — since "none of the
 checked patients are on this drug" is an expected, ordinary result, not a
 failure.
 
-"How many patients were checked" always means the number of IDs in the
-input list — not the number that turned out to match a node in the
-graph. A patient ID that doesn't match anything still counts as
-checked; it just contributes zero to every drug's count. This is the one
+"How many patients were checked" always means the number of patients who
+passed verification — not the number of IDs originally handed to this
+tool. A patient ID that fails verification (wrong condition, or doesn't
+satisfy the lab threshold) is dropped before this count is taken and no
+longer contributes to it, including contributing zero to every drug's
+count — it simply isn't part of the checked group at all. This is the one
 number the confidence rule (see Structured output) is based on, so it
 needs a single, fixed meaning — it is never recomputed a second way
 anywhere else in the agent.
@@ -281,10 +283,12 @@ Every run returns one answer object with these fields:
 The final answer object has no separate field for "how many patients
 were checked" (see Tool 2) — it is never shown on its own. It only ever
 feeds the `confidence` rule below; anyone reading the answer sees its
-effect through `confidence` and `caveat`, and can also count the entries
-in `rag_patient_ids` directly, since that always has the same length as
-the number checked (the agent always sends every ID it found straight
-to Tool 2, without dropping any).
+effect only through `confidence` and `caveat`. This number is *not* the
+same as the length of `rag_patient_ids`: the agent still sends every ID
+RAG found straight to Tool 2, but Tool 2 now verifies each one against
+the graph's real data first (see Tool 2) and only counts the patients who
+pass — so `rag_patient_ids` can be longer than the number that actually
+determines `confidence`.
 
 Not all fields come from the same place. `question`, `rag_patient_ids`,
 and `graph_result` are always filled in directly by the agent's own code,
@@ -309,12 +313,29 @@ Rules for filling these in:
 - `confidence` is `low` whenever the graph step didn't run, the graph step
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
-  patients were actually checked: fewer than 3 patients is `low` (too
-  small a group to trust), 3 or 4 patients is `medium`, and 5 or more is
-  `high`. These numbers are deliberately set against the search tool's
-  default of 5 results per question (see Tool 1) — a boundary like "10 or
-  more" would make `high` confidence unreachable at the default setting,
-  which defeats the point of having the tier at all.
+  patients were actually verified (see Tool 2 — the number who passed the
+  condition/lab check, not the raw number RAG returned): fewer than 3
+  verified patients is `low` (too small a group to trust), 3 or 4 is
+  `medium`, and 5 or more is `high`. These thresholds are unchanged from
+  before the Tool 2 verification fix and are still deliberately set
+  against the search tool's default of 5 results per question (see Tool
+  1) — a boundary like "10 or more" would make `high` confidence
+  unreachable at the default setting, which defeats the point of having
+  the tier at all. They now simply attach to a stronger, verified claim
+  instead of a raw, unverified one.
+- **What this tier does and doesn't mean:** it reflects how large the
+  *verified* sample was — not how complete that sample is against the
+  true population. A `high` result means "5 or more patients were
+  confirmed to genuinely match, and the count among them is exact." It
+  does not mean "this is most, or even much, of the true matching
+  population." Given the real recall numbers measured directly against
+  the graph (see "Important honesty point" above — 0.000 at the agent's
+  actual `top_k=5` setting, and only 0.059 even at Block 4's hard
+  `top_k=20` ceiling), real runs will rarely reach `high` confidence
+  anymore. That is the correct, honest behavior of this tier, not a bug:
+  a small verified sample is exactly what a low-recall retrieval step
+  should produce, and this tier is supposed to say so plainly rather than
+  paper over it.
 - `caveat` is filled in on every `low` or `medium` result, explaining why
   — either which step failed, or that the patient group checked was small.
 - The object is always valid — there is no path through the agent that

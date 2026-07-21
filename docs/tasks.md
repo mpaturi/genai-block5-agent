@@ -89,6 +89,11 @@ looks like.
 - [ ] Write `scripts/logging_utils.py` and wire it in
 - [ ] Confirm a run produces a correctly shaped log entry
 - [ ] Write `scripts/run_eval.py`, run it, record the score
+- [ ] Investigate real recall at the agent's actual `top_k=5` setting,
+      measured directly against the graph's true patient counts for Block
+      5's own 8 answerable questions (not borrowed from Block 4's separate
+      eval set) — document the finding in `docs/spec.md`'s Important
+      honesty point section, including whether raising `top_k` helps
 - [ ] Write `docs/eval_results.md`
 - [ ] Write `scripts/run_all.py` and `README.md`
 - [ ] Commit, push, open PR (base `phase-2-tdd`)
