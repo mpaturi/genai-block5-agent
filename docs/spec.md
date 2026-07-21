@@ -105,7 +105,31 @@ comparison to the graph's exact count.
 **Important honesty point:** the RAG service does not find every matching
 patient — it only returns a handful of likely matches. So the graph's
 count is exact, but only over the patients RAG happened to find, not
-every matching patient in the system. The agent must say so whenever that
+every matching patient in the system. This is not a hypothetical
+gap — measured directly against the graph's true patient counts (not
+estimated, and not borrowed from Block 4's own, separate eval set) at the
+agent's actual setting (`top_k=5`), real recall across Block 5's own 8
+answerable questions is **0.000**. Concretely: "Essential hypertension,
+SBP > 140" has 99 real matching patients in the graph, and search returns
+zero of them.
+
+Raising `top_k` was investigated as a possible mitigation, and ruled out
+with evidence rather than assumed: Block 4's API hard-rejects any `top_k`
+above 20 (HTTP 422, confirmed by a live call), so 20 is a real ceiling,
+not a setting this project simply chose not to raise. Even at that
+ceiling, mean recall only reaches 0.059, with 5 of the 8 questions still
+finding zero real matches at any setting tested.
+
+This was also spot-checked by hand for confidence, not just trusted from
+the measurement script: confirmed directly against the graph that exactly
+1 of 117 real Atrial fibrillation patients has SBP > 150, matching the
+measured result exactly — so this is a real property of the data, not a
+bug in how it was measured.
+
+The Tool 2 verification step (see Tool 2) guarantees the count is
+accurate over whichever few patients are found — but it does not, and
+cannot, fix this. It's a Block 4 retrieval-quality limitation, out of
+Block 5's scope to fix (see Scope). The agent must say so whenever that
 matters (see Structured output, `caveat` field).
 
 **Picking out the two named drugs:** the graph step always returns a
