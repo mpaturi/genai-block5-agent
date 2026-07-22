@@ -31,7 +31,14 @@ def main() -> None:
         query_text = build_rag_query(question)
         if query_text in fixtures:
             continue  # same query text already captured for an earlier task
-        fixtures[query_text] = search_patients(query_text, top_k=5)
+        fixtures[query_text] = search_patients(
+            query_text,
+            question.condition,
+            question.lab,
+            question.comparison,
+            question.value,
+            top_k=20,
+        )
 
     FIXTURES_PATH.write_text(json.dumps(fixtures, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {len(fixtures)} RAG fixtures to {FIXTURES_PATH}")
