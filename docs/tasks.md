@@ -89,7 +89,7 @@ looks like.
 - [ ] Write `scripts/logging_utils.py` and wire it in
 - [ ] Confirm a run produces a correctly shaped log entry
 - [ ] Write `scripts/run_eval.py`, run it, record the score
-- [ ] Investigate real recall at the agent's actual `top_k=5` setting,
+- [x] Investigate real recall at the agent's actual `top_k=5` setting,
       measured directly against the graph's true patient counts for Block
       5's own 8 answerable questions (not borrowed from Block 4's separate
       eval set) — document the finding in `docs/spec.md`'s Important
@@ -139,3 +139,21 @@ looks like.
       questions (not borrowed from Block 4's eval) — mean recall 0.761, up
       from 0.000/0.059, every question now finds at least one real match
 - [x] Commit, push, open PR (base `phase-4-ci`)
+
+## Phase 6 — Confidence recalibration (`phase-6-confidence-recalibration`, base: `phase-5-rag-filter-wiring`)
+
+- [x] Recalibrate `compute_confidence()`'s tiers in `scripts/schemas.py`,
+      using the same design principle as the original thresholds (`high`
+      reachable at Tool 1's actual ceiling, not trivial, not practically
+      unreachable) scaled to the new `top_k=20` default, grounded in the
+      real per-question verified-patient counts Phase 5 measured — not
+      guessed
+- [x] Regenerate `data/eval/answer_key.json`'s `confidence` values under
+      the new thresholds, so the golden answers stay consistent with what
+      the recalibrated agent actually computes
+- [x] Rewrite `docs/spec.md`'s Important honesty point and confidence-tier
+      sections with the real, remeasured recall numbers (mean 0.761, up
+      from 0.000/0.059) and the new tier boundaries, replacing Phase 5's
+      TODO markers — stating plainly that the improvement is real but
+      uneven, not a uniform fix
+- [x] Commit, push

@@ -105,45 +105,59 @@ comparison to the graph's exact count.
 **Important honesty point:** the RAG service does not find every matching
 patient — it only returns a handful of likely matches. So the graph's
 count is exact, but only over the patients RAG happened to find, not
-every matching patient in the system. This is not a hypothetical
-gap — measured directly against the graph's true patient counts (not
-estimated, and not borrowed from Block 4's own, separate eval set) at the
-agent's actual setting (`top_k=5`), real recall across Block 5's own 8
-answerable questions is **0.000**. Concretely: "Essential hypertension,
-SBP > 140" has 99 real matching patients in the graph, and search returns
-zero of them.
+every matching patient in the system. This gap is real, but it is now
+substantially smaller than it was: wiring in Block 4's Phase 7 metadata
+filter and raising Tool 1's default `top_k` to 20 (see Tool 1 above)
+measurably improved it, re-measured directly against the graph's true
+patient counts (not estimated, and not borrowed from Block 4's own,
+separate eval set), across the same 8 answerable questions as before.
 
-**TODO (Branch 2):** the paragraph above is now obsolete. Tool 1's default
-`top_k` is 20 (up from 5) and Block 4's Phase 7 filter is now applied
-(see Tool 1 above), so the `0.000` figure measured at the old `top_k=5`,
-unfiltered setting no longer reflects real behavior. This needs to be
-rewritten with real, remeasured numbers once they're confirmed stable —
-not guessed here.
+**The real, current number: mean recall is 0.761**, up from 0.000 at the
+old `top_k=5`, unfiltered setting, and 0.059 at Block 4's old `top_k=20`
+unfiltered ceiling. Every one of the 8 questions now finds at least one
+real match — zero of them find nothing, down from 5 of 8 before. Per
+question, the true population size in the graph versus what search
+actually finds (and Tool 2 verifies):
 
-Raising `top_k` was investigated as a possible mitigation, and ruled out
-with evidence rather than assumed: Block 4's API hard-rejects any `top_k`
-above 20 (HTTP 422, confirmed by a live call), so 20 is a real ceiling,
-not a setting this project simply chose not to raise. Even at that
-ceiling, mean recall only reaches 0.059, with 5 of the 8 questions still
-finding zero real matches at any setting tested.
+| Question (condition / lab) | True matching patients | Found & verified | Recall |
+|---|---|---|---|
+| Essential hypertension / SBP > 140 | 99 | 20 | 0.202 |
+| Osteoporosis / BMI < 22 | 3 | 3 | 1.000 |
+| Pulmonary embolism / SBP < 100 | 8 | 8 | 1.000 |
+| Atrial fibrillation / SBP > 150 | 1 | 1 | 1.000 |
+| Hyperlipidemia / HbA1c > 7 | 3 | 3 | 1.000 |
+| Congestive heart failure / SBP < 110 | 18 | 16 | 0.889 |
+| Streptococcal pharyngitis / BMI < 25 | 397 | 20 | 0.050 |
+| Anemia / Glucose > 150 | 19 | 18 | 0.947 |
 
-**TODO (Branch 2):** the paragraph above is also now obsolete — it
-concluded raising `top_k` was "ruled out," but that conclusion no longer
-holds now that Block 4's Phase 7 filter makes a higher `top_k` safe (see
-Tool 1 above). This needs to be rewritten once real numbers are
-re-measured at the new setting.
+Honestly, the improvement is real but uneven, not a uniform fix. Four of
+the eight questions now find every real match (recall 1.000), and two
+more find nearly all of them (0.889, 0.947). But the two questions with
+the largest true populations — Essential hypertension (99 patients) and
+Streptococcal pharyngitis (397 patients) — are still capped hard by Tool
+1's `top_k=20` ceiling itself, not by filter or semantic quality: across
+all 8 questions, every single patient the filter returns genuinely passes
+Tool 2's verification (zero false positives measured) — it simply cannot
+return more than 20 of them no matter how many really exist. For those
+two, recall stays low (0.202, 0.050) for a structural reason that raising
+`top_k` cannot fix, because it's already at Block 4's hard ceiling: the
+API hard-rejects any `top_k` above 20 (HTTP 422, confirmed by a live
+call), so 20 is a real limit, not a setting this project simply chose not
+to raise.
 
 This was also spot-checked by hand for confidence, not just trusted from
 the measurement script: confirmed directly against the graph that exactly
-1 of 117 real Atrial fibrillation patients has SBP > 150, matching the
-measured result exactly — so this is a real property of the data, not a
-bug in how it was measured.
+1 of 117 real Atrial fibrillation patients has SBP > 150, and search now
+finds that one patient — matching the measured result exactly, the same
+spot-check fact as before this filter went in.
 
 The Tool 2 verification step (see Tool 2) guarantees the count is
-accurate over whichever few patients are found — but it does not, and
-cannot, fix this. It's a Block 4 retrieval-quality limitation, out of
-Block 5's scope to fix (see Scope). The agent must say so whenever that
-matters (see Structured output, `caveat` field).
+accurate over whichever patients are found — but it does not, and cannot,
+guarantee that's every real match. For large-population questions like
+Essential hypertension and Streptococcal pharyngitis above, that gap is
+still a Block 4 retrieval-ceiling limitation, out of Block 5's scope to
+fix (see Scope). The agent must say so whenever that matters (see
+Structured output, `caveat` field).
 
 **Picking out the two named drugs:** the graph step always returns a
 count for every drug the checked patients are on, not just the two named
@@ -332,28 +346,38 @@ Rules for filling these in:
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
   patients were actually verified (see Tool 2 — the number who passed the
-  condition/lab check, not the raw number RAG returned): fewer than 3
-  verified patients is `low` (too small a group to trust), 3 or 4 is
-  `medium`, and 5 or more is `high`. These thresholds are unchanged from
-  before the Tool 2 verification fix and are still deliberately set
-  against the search tool's default of 5 results per question (see Tool
-  1) — a boundary like "10 or more" would make `high` confidence
-  unreachable at the default setting, which defeats the point of having
-  the tier at all. They now simply attach to a stronger, verified claim
-  instead of a raw, unverified one.
+  condition/lab check, not the raw number RAG returned): fewer than 12
+  verified patients is `low`, 12 to 19 is `medium`, and 20 — the maximum
+  Tool 1's `top_k=20` can ever hand Tool 2 (see Tool 1) — is `high`.
+  These are the original thresholds (fewer than 3 was `low`, 3 or 4 was
+  `medium`, 5 or more was `high`) scaled by the same 4x factor Tool 1's
+  default `top_k` grew by (5 -> 20), so `high` keeps the meaning it
+  always had: reachable at the tool's actual operating ceiling, not
+  trivially easy, and not practically unreachable. Left unscaled, "5 or
+  more" would now only mean a quarter of the new ceiling, not "at or
+  near" it — quietly making `high` far easier to reach than originally
+  intended, for no reason connected to the agent actually being more
+  trustworthy.
+
+  These boundaries are grounded in the real per-question verified-patient
+  counts Block 5's own 8 answerable questions actually produced (see
+  Important honesty point above) — 1, 3, 3, 8, 16, 18, 20, 20 — not
+  guessed: they split that real distribution into four `low` (1, 3, 3,
+  8), two `medium` (16, 18), and two `high` (20, 20).
 - **What this tier does and doesn't mean:** it reflects how large the
   *verified* sample was — not how complete that sample is against the
-  true population. A `high` result means "5 or more patients were
-  confirmed to genuinely match, and the count among them is exact." It
-  does not mean "this is most, or even much, of the true matching
-  population." Given the real recall numbers measured directly against
-  the graph (see "Important honesty point" above — 0.000 at the agent's
-  actual `top_k=5` setting, and only 0.059 even at Block 4's hard
-  `top_k=20` ceiling), real runs will rarely reach `high` confidence
-  anymore. That is the correct, honest behavior of this tier, not a bug:
-  a small verified sample is exactly what a low-recall retrieval step
-  should produce, and this tier is supposed to say so plainly rather than
-  paper over it.
+  true population. A `high` result now means "Tool 1's entire 20-patient
+  budget came back verified — every one of them a real, confirmed match,
+  and the count among them is exact." It does not mean "this is most, or
+  even much, of the true matching population": Block 5's own measured
+  recall (see Important honesty point above — mean 0.761, but as low as
+  0.050 for the largest true populations) shows a `high`-confidence
+  result can still be built on a small slice of patients who really
+  exist, when the true population is much larger than the 20-patient
+  ceiling. That is the correct, honest behavior of this tier, not a bug:
+  it reports how much was verified, never how much exists — and this
+  branch's recalibration keeps that true at the new `top_k=20` setting
+  the same way the original thresholds kept it true at `top_k=5`.
 - `caveat` is filled in on every `low` or `medium` result, explaining why
   — either which step failed, or that the patient group checked was small.
 - The object is always valid — there is no path through the agent that
