@@ -7,16 +7,38 @@ of this needs a real graph database running.
 """
 from scripts.graph_tool import GraphServiceError, count_drugs
 
+_CONDITION = "Essential hypertension"
+_LAB = "SBP"
+_COMPARISON = "above"
+_VALUE = 140
+
+
+class _FakeResult:
+    """Stands in for a Neo4j Result - supports both .single() (used by the
+    verify query) and iteration (used by the drug-count query)."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def __iter__(self):
+        return iter(self._rows)
+
+    def single(self):
+        return self._rows[0] if self._rows else None
+
 
 class _FakeSession:
-    def __init__(self, rows=None, raise_exc=None):
-        self._rows = rows or []
+    def __init__(self, verified_ids=None, count_rows=None, raise_exc=None):
+        self._verified_ids = verified_ids if verified_ids is not None else []
+        self._count_rows = count_rows or []
         self._raise_exc = raise_exc
 
     def run(self, query, **params):
         if self._raise_exc is not None:
             raise self._raise_exc
-        return iter(self._rows)
+        if "verified_ids" in query:
+            return _FakeResult([{"verified_ids": self._verified_ids}])
+        return _FakeResult(self._count_rows)
 
     def __enter__(self):
         return self
@@ -26,12 +48,13 @@ class _FakeSession:
 
 
 class _FakeDriver:
-    def __init__(self, rows=None, raise_exc=None):
-        self._rows = rows
+    def __init__(self, verified_ids=None, count_rows=None, raise_exc=None):
+        self._verified_ids = verified_ids
+        self._count_rows = count_rows
         self._raise_exc = raise_exc
 
     def session(self, database=None):
-        return _FakeSession(self._rows, self._raise_exc)
+        return _FakeSession(self._verified_ids, self._count_rows, self._raise_exc)
 
 
 class _NeverOpenedDriver:
@@ -41,15 +64,26 @@ class _NeverOpenedDriver:
         raise AssertionError("no query should run for this input")
 
 
+def _count_drugs(person_ids, **kwargs):
+    """count_drugs with the question fields defaulted, so tests only need
+    to override what they actually care about."""
+    kwargs.setdefault("condition", _CONDITION)
+    kwargs.setdefault("lab", _LAB)
+    kwargs.setdefault("comparison", _COMPARISON)
+    kwargs.setdefault("value", _VALUE)
+    return count_drugs(person_ids, **kwargs)
+
+
 def test_count_drugs_returns_a_mapping_from_drug_to_count():
     driver = _FakeDriver(
-        rows=[
+        verified_ids=[1, 2, 3],
+        count_rows=[
             {"drug": "Lisinopril", "patient_count": 2},
             {"drug": "Amlodipine", "patient_count": 1},
-        ]
+        ],
     )
 
-    result = count_drugs([1, 2, 3], driver=driver)
+    result = _count_drugs([1, 2, 3], driver=driver)
 
     assert result == {
         "drug_counts": {"Lisinopril": 2, "Amlodipine": 1},
@@ -60,9 +94,11 @@ def test_count_drugs_returns_a_mapping_from_drug_to_count():
 def test_count_drugs_a_drug_with_zero_matches_is_absent_not_zero():
     # Only Lisinopril has any matching patients among the three checked -
     # Amlodipine must not appear in drug_counts at all, not as {"Amlodipine": 0}.
-    driver = _FakeDriver(rows=[{"drug": "Lisinopril", "patient_count": 2}])
+    driver = _FakeDriver(
+        verified_ids=[1, 2, 3], count_rows=[{"drug": "Lisinopril", "patient_count": 2}]
+    )
 
-    result = count_drugs([1, 2, 3], driver=driver)
+    result = _count_drugs([1, 2, 3], driver=driver)
 
     assert result["drug_counts"] == {"Lisinopril": 2}
     assert "Amlodipine" not in result["drug_counts"]
@@ -70,32 +106,89 @@ def test_count_drugs_a_drug_with_zero_matches_is_absent_not_zero():
 
 
 def test_count_drugs_empty_input_returns_immediately_without_querying():
-    result = count_drugs([], driver=_NeverOpenedDriver())
+    result = _count_drugs([], driver=_NeverOpenedDriver())
 
     assert result == {"drug_counts": {}, "patients_checked": 0}
 
 
 def test_count_drugs_rejects_non_positive_ids_without_querying():
     try:
-        count_drugs([1, -2, 3], driver=_NeverOpenedDriver())
+        _count_drugs([1, -2, 3], driver=_NeverOpenedDriver())
         assert False, "expected GraphServiceError"
     except GraphServiceError as exc:
         assert exc.detail == "invalid_person_id"
+        assert exc.retryable is False
 
 
 def test_count_drugs_rejects_non_integer_ids_without_querying():
     try:
-        count_drugs([1, 2.5], driver=_NeverOpenedDriver())
+        _count_drugs([1, 2.5], driver=_NeverOpenedDriver())
         assert False, "expected GraphServiceError"
     except GraphServiceError as exc:
         assert exc.detail == "invalid_person_id"
+        assert exc.retryable is False
 
 
 def test_count_drugs_raises_graph_service_error_on_driver_failure():
     driver = _FakeDriver(raise_exc=RuntimeError("boom"))
 
     try:
-        count_drugs([1, 2, 3], driver=driver)
+        _count_drugs([1, 2, 3], driver=driver)
         assert False, "expected GraphServiceError"
     except GraphServiceError as exc:
         assert exc.detail == "RuntimeError"
+        assert exc.retryable is True
+
+
+def test_count_drugs_excludes_a_patient_who_fails_the_condition_check():
+    # Patient 1 doesn't actually have the stated condition - verification
+    # drops them, so they never reach the drug count at all.
+    driver = _FakeDriver(
+        verified_ids=[2, 3], count_rows=[{"drug": "Lisinopril", "patient_count": 2}]
+    )
+
+    result = _count_drugs([1, 2, 3], driver=driver)
+
+    assert result == {"drug_counts": {"Lisinopril": 2}, "patients_checked": 2}
+
+
+def test_count_drugs_excludes_a_patient_who_fails_the_lab_check():
+    # Patient 2 has the condition but doesn't satisfy the lab threshold -
+    # verification drops them the same way.
+    driver = _FakeDriver(
+        verified_ids=[1, 3], count_rows=[{"drug": "Amlodipine", "patient_count": 2}]
+    )
+
+    result = _count_drugs([1, 2, 3], driver=driver)
+
+    assert result == {"drug_counts": {"Amlodipine": 2}, "patients_checked": 2}
+
+
+def test_count_drugs_mix_of_passing_and_failing_only_counts_passing():
+    # Of four candidates, only two pass verification - the count and
+    # patients_checked must reflect only those two, not all four.
+    driver = _FakeDriver(
+        verified_ids=[2, 4], count_rows=[{"drug": "Metformin", "patient_count": 1}]
+    )
+
+    result = _count_drugs([1, 2, 3, 4], driver=driver)
+
+    assert result == {"drug_counts": {"Metformin": 1}, "patients_checked": 2}
+
+
+def test_count_drugs_rejects_unrecognized_lab_without_querying():
+    try:
+        _count_drugs([1, 2, 3], lab="Cholesterol", driver=_NeverOpenedDriver())
+        assert False, "expected GraphServiceError"
+    except GraphServiceError as exc:
+        assert exc.detail == "invalid_lab_or_comparison"
+        assert exc.retryable is False
+
+
+def test_count_drugs_rejects_unrecognized_comparison_without_querying():
+    try:
+        _count_drugs([1, 2, 3], comparison="sideways", driver=_NeverOpenedDriver())
+        assert False, "expected GraphServiceError"
+    except GraphServiceError as exc:
+        assert exc.detail == "invalid_lab_or_comparison"
+        assert exc.retryable is False

@@ -1,0 +1,58 @@
+"""Tool 1 - semantic patient search (see docs/spec.md's Tool 1).
+
+Wraps Block 4's existing POST /query endpoint. Does not retry - retry
+policy lives in the agent (see docs/spec.md's Agent steps).
+"""
+import os
+
+import requests
+from dotenv import load_dotenv
+
+from scripts.schemas import dedupe_and_order_patient_ids
+
+load_dotenv()
+
+RAG_API_URL = os.environ.get("RAG_API_URL", "http://localhost:8000")
+
+
+class RAGServiceError(Exception):
+    """Raised on any search-tool failure.
+
+    `retryable` distinguishes a temporary problem (service down, unexpected
+    status) from bad input (an out-of-range top_k) - a bad-input failure
+    won't be fixed by trying again, so the agent's retry loop checks this
+    flag before retrying (see docs/spec.md's Agent steps).
+    """
+
+    def __init__(self, detail: str, retryable: bool = True):
+        super().__init__(detail)
+        self.detail = detail
+        self.retryable = retryable
+
+
+def search_patients(query_text: str, top_k: int = 5) -> dict:
+    if not (1 <= top_k <= 20):
+        raise RAGServiceError("invalid_top_k", retryable=False)
+
+    try:
+        response = requests.post(
+            f"{RAG_API_URL}/query",
+            json={"question": query_text, "top_k": top_k},
+            timeout=10,
+        )
+    except requests.exceptions.RequestException:
+        raise RAGServiceError("connection_error")
+
+    if response.status_code == 200:
+        body = response.json()
+        return {
+            "answer": body["answer"],
+            "patient_ids": dedupe_and_order_patient_ids(body["sources"]),
+            "retrieved_count": body["retrieved_count"],
+        }
+
+    if response.status_code == 502:
+        detail = response.json().get("detail", "unknown")
+        raise RAGServiceError(detail)
+
+    raise RAGServiceError(f"unexpected_status_{response.status_code}")

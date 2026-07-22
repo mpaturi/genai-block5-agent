@@ -16,7 +16,7 @@ import pytest
 from scripts.agent import run_agent
 from scripts.graph_tool import GraphServiceError
 from scripts.rag_tool import RAGServiceError
-from scripts.schemas import QuestionInput
+from scripts.schemas import QuestionInput, assemble_question_text
 
 QUESTION = QuestionInput(
     condition="hypertension",
@@ -55,12 +55,13 @@ def test_nothing_found_short_circuits_to_fixed_fallback_answer():
             "retrieved_count": 0,
         }
     )
-    count_fn = _CountingFake(lambda patient_ids: pytest.fail("count step must be skipped"))
+    count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
 
     answer, count_step_ran = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
 
     assert search_fn.call_count == 1
     assert count_step_ran is False
+    assert answer.question == assemble_question_text(QUESTION)
     assert answer.answer == (
         "I don't know — I couldn't find any patient records relevant to that question."
     )
@@ -74,13 +75,14 @@ def test_nothing_found_short_circuits_to_fixed_fallback_answer():
 
 def test_search_step_broken_after_retries_returns_fixed_error_answer():
     search_fn = _CountingFake(_always_raise(RAGServiceError("connection_error")))
-    count_fn = _CountingFake(lambda patient_ids: pytest.fail("count step must be skipped"))
+    count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
 
     answer, count_step_ran = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
 
     # 2 retries => 3 attempts total, per docs/spec.md's Agent steps section.
     assert search_fn.call_count == 3
     assert count_step_ran is False
+    assert answer.question == assemble_question_text(QUESTION)
     assert answer.answer == (
         "I wasn't able to answer this question because the patient search "
         "step could not be completed."
@@ -108,6 +110,7 @@ def test_graph_step_broken_after_retries_returns_degraded_answer():
     assert count_fn.call_count == 3
     # The count step was attempted (and failed), not skipped - it "ran".
     assert count_step_ran is True
+    assert answer.question == assemble_question_text(QUESTION)
     assert answer.answer == (
         "Search found matching patients, but the exact drug count could not "
         "be completed."
@@ -130,7 +133,7 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
         }
     )
     count_fn = _CountingFake(
-        lambda patient_ids: {
+        lambda patient_ids, condition, lab, comparison, value: {
             "drug_counts": {"Lisinopril": 2},
             "patients_checked": 3,
         }
@@ -148,6 +151,7 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
     # slower, more expensive language-model call.
     assert answer_fn.call_count == 2
     assert count_step_ran is True
+    assert answer.question == assemble_question_text(QUESTION)
     assert answer.answer == (
         "I found matching patients and counted their drugs, but wasn't able "
         "to put together a valid written answer."
