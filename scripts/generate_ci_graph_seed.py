@@ -10,12 +10,11 @@ so the seed has to carry that data too, not just Patient/Drug/PRESCRIBED.
 answer_key.json only records patients_checked as a count, not which
 specific patient IDs verified - that information doesn't exist anywhere,
 so this script picks deterministically: for each answerable task, the
-first patients_checked patient IDs (in that task's RAG order, among
-patients exclusive to that task - see below) get a HAS_CONDITION
-relationship to that task's condition and a lab property value that
-satisfies its comparison. Every other patient gets neither - not a
-failing lab value, just no condition or lab data at all, which fails
-every possible verification check unconditionally.
+first patients_checked patient IDs (in that task's RAG order) get a
+HAS_CONDITION relationship to that task's condition and a lab property
+value that satisfies its comparison. Every other patient gets neither -
+not a failing lab value, just no condition or lab data at all, which
+fails every possible verification check unconditionally.
 
 For each answerable task, every drug in that task's golden graph_result
 (not just drug_a/drug_b) gets assigned enough of that task's *verified*
@@ -30,14 +29,28 @@ Processing order is fixed - tasks.json's array order, then each task's
 graph_result key order - so re-running this script on unchanged input
 always produces byte-identical output.
 
-Patients whose ID appears in more than one answerable task's RAG results
-(confirmed to happen in practice - two tasks here share two patients)
-never get a condition, a lab value, or a drug assigned, in any task: the
-seeded graph is one shared graph, and a query for one task's patient IDs
-has no way to exclude data that was really set for a different task's
-purposes. A shared patient still gets its :Patient node either way; it
-just never gets anything that could make it incorrectly pass verification
-or incorrectly count toward a drug, for any task.
+A patient ID appearing in more than one answerable task's RAG results
+(confirmed to happen in practice, now that real recall is much higher -
+one real patient here genuinely has both Pulmonary embolism and
+Congestive heart failure) is not automatically wrong to verify for more
+than one task: HAS_CONDITION edges to different condition names never
+conflict, and a shared lab property (e.g. SBP for both tasks above) gets
+one combined value satisfying every sharing task's comparison at once
+(the tightest bound across all of them) - raising loudly if two sharing
+tasks' bounds are genuinely incompatible (e.g. "above 140" and "below
+100" on the same property), since that would mean the real data itself
+was self-contradictory.
+
+Drug assignment is where sharing actually is unsafe: graph_tool.py's
+drug-count query is scoped to whichever patient IDs pass verification for
+ONE task, so if a shared patient held a PRESCRIBED edge assigned for a
+different task, that edge would leak into this task's counted results
+the moment the shared patient also verifies for this task. So a shared
+patient (by raw candidate-list membership, independent of whether it ends
+up in patients_checked) is still never chosen to hold a drug for any
+task - only patients exclusive to one task's candidate list are eligible
+for drug assignment, with the same not-enough-patients error as before if
+a task's exclusive pool is empty while it still needs to assign a drug.
 """
 import json
 from pathlib import Path
@@ -84,10 +97,30 @@ def _assign_patients_to_drugs(patient_ids: list[int], graph_result: dict) -> lis
     return assignments
 
 
-def _satisfying_lab_value(comparison: str, value: float) -> float:
-    if comparison == "above":
-        return value + _SATISFYING_MARGIN
-    return value - _SATISFYING_MARGIN
+def _resolve_combined_lab_value(constraints: list[tuple[str, float]]) -> float:
+    """Combine every sharing task's (comparison, threshold) constraint on
+    one lab property into a single value that satisfies all of them at
+    once - the tightest "above" bound and the tightest "below" bound,
+    meeting in the middle if a patient is constrained from both sides.
+    Raises if the bounds don't leave any valid value, since that would
+    mean the real data was self-contradictory, not a generator bug.
+    """
+    above_thresholds = [t for c, t in constraints if c == "above"]
+    below_thresholds = [t for c, t in constraints if c == "below"]
+
+    lower_bound = max(above_thresholds) if above_thresholds else None
+    upper_bound = min(below_thresholds) if below_thresholds else None
+
+    if lower_bound is not None and upper_bound is not None:
+        if lower_bound >= upper_bound:
+            raise RuntimeError(
+                f"impossible combined lab constraint: needs > {lower_bound} "
+                f"and < {upper_bound} at the same time"
+            )
+        return (lower_bound + upper_bound) / 2
+    if lower_bound is not None:
+        return lower_bound + _SATISFYING_MARGIN
+    return upper_bound - _SATISFYING_MARGIN
 
 
 def _escape(value: str) -> str:
@@ -131,46 +164,67 @@ def main() -> None:
     drug_names_seen: dict[str, None] = {}
     has_condition_pairs_seen: dict[tuple[int, str], None] = {}
     prescribed_pairs_seen: dict[tuple[int, str], None] = {}
-    patient_lab_property: dict[int, tuple[str, float]] = {}
+    # person_id -> lab_property -> list of (comparison, threshold), one
+    # entry per sharing task - resolved to a single value per property
+    # only after every task has contributed its constraint.
+    patient_lab_constraints: dict[int, dict[str, list[tuple[str, float]]]] = {}
+    task_verified_ids: dict[str, list[int]] = {}
 
     for task in answerable_tasks:
         patient_ids = _task_patient_ids(task, fixtures)
         patients_checked = answer_key[task["id"]]["patients_checked"]
-        graph_result = answer_key[task["id"]]["graph_result"]
         condition_names_seen.setdefault(task["condition"], None)
 
         for person_id in patient_ids:
             patient_ids_seen.setdefault(person_id, None)
 
-        exclusive_candidates = [pid for pid in patient_ids if pid not in shared_patient_ids]
-        if len(exclusive_candidates) < patients_checked:
-            raise RuntimeError(
-                f"task {task['id']}: only {len(exclusive_candidates)} patients are "
-                f"exclusive to this task, but {patients_checked} need to verify - "
-                "this generator can't do that without cross-task contamination"
-            )
-        verified_ids = exclusive_candidates[:patients_checked]
+        verified_ids = patient_ids[:patients_checked]
+        task_verified_ids[task["id"]] = verified_ids
 
         lab_property = _LAB_PROPERTY[task["lab"]]
-        satisfying_value = _satisfying_lab_value(task["comparison"], task["value"])
         for person_id in verified_ids:
-            patient_lab_property[person_id] = (lab_property, satisfying_value)
             has_condition_pairs_seen.setdefault((person_id, task["condition"]), None)
+            patient_lab_constraints.setdefault(person_id, {}).setdefault(
+                lab_property, []
+            ).append((task["comparison"], task["value"]))
 
+    patient_lab_values: dict[int, dict[str, float]] = {
+        person_id: {
+            lab_property: _resolve_combined_lab_value(constraints)
+            for lab_property, constraints in properties.items()
+        }
+        for person_id, properties in patient_lab_constraints.items()
+    }
+
+    for task in answerable_tasks:
+        graph_result = answer_key[task["id"]]["graph_result"]
         if not graph_result:
             continue
 
-        for person_id, drug_name in _assign_patients_to_drugs(verified_ids, graph_result):
+        verified_ids = task_verified_ids[task["id"]]
+        # Only patients exclusive to this task's own candidate list are
+        # eligible to hold a drug - a shared patient's PRESCRIBED edge
+        # would leak into every other task it also verifies for.
+        eligible_for_drugs = [pid for pid in verified_ids if pid not in shared_patient_ids]
+        if not eligible_for_drugs:
+            raise RuntimeError(
+                f"task {task['id']}: every verified patient is shared with another "
+                "task, so there's no one left to safely hold a drug without "
+                "cross-task contamination"
+            )
+
+        for person_id, drug_name in _assign_patients_to_drugs(eligible_for_drugs, graph_result):
             drug_names_seen.setdefault(drug_name, None)
             prescribed_pairs_seen.setdefault((person_id, drug_name), None)
 
     lines = []
     for person_id in patient_ids_seen:
-        if person_id in patient_lab_property:
-            lab_property, lab_value = patient_lab_property[person_id]
-            lines.append(
-                f"CREATE (:Patient {{person_id: {person_id}, {lab_property}: {lab_value}}});"
+        lab_properties = patient_lab_values.get(person_id)
+        if lab_properties:
+            props = ", ".join(
+                f"{prop}: {value}" for prop, value in lab_properties.items()
             )
+            lines.append(f"CREATE (:Patient {{person_id: {person_id}, {props}}});")
         else:
             lines.append(f"CREATE (:Patient {{person_id: {person_id}}});")
     for condition_name in condition_names_seen:
