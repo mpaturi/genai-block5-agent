@@ -1,0 +1,84 @@
+{
+  "q1": {
+    "rag_patient_ids": [
+      140
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  },
+  "q2": {
+    "rag_patient_ids": [
+      2216
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  },
+  "q3": {
+    "rag_patient_ids": [
+      10390
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  },
+  "q4": {
+    "rag_patient_ids": [
+      150,
+      149,
+      1501
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  },
+  "q5": {
+    "rag_patient_ids": [
+      2807,
+      4072,
+      5076,
+      7937,
+      5091
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  },
+  "q6": {
+    "rag_patient_ids": [
+      1106,
+      11083,
+      1100,
+      11454,
+      4283
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  },
+  "q7": {
+    "rag_patient_ids": [
+      8715,
+      9159,
+      5263,
+      11146,
+      2130
+    ],
+    "graph_result": {},
+    "patients_checked": 1,
+    "confidence": "low"
+  },
+  "q8": {
+    "rag_patient_ids": [
+      1501,
+      149,
+      1508,
+      1504,
+      1450
+    ],
+    "graph_result": {},
+    "patients_checked": 0,
+    "confidence": "low"
+  }
+}
