@@ -1,77 +1,140 @@
 {
   "patients with Essential hypertension and SBP above 140": {
-    "answer": "Based on the provided patient records, I cannot identify any patients meeting both criteria of Essential hypertension AND SBP above 140.\n\nPatient 140 has an SBP of 89 mmHg, which does not meet the SBP > 140 threshold. Additionally, while Patient 140 has documented conditions (Hyperlipidemia and Diabetes mellitus type 2), Essential hypertension is not listed among them.\n\nTo answer your question properly, I would need access to patient records that include:\n1. A diagnosis of Essential hypertension documented in the conditions list\n2. A recorded SBP measurement greater than 140 mmHg",
+    "answer": "# Patients with Essential Hypertension and SBP > 140 mmHg\n\nBased on the provided records, the following patients meet both criteria:\n\n1. Patient 7253 (person_id: 7253) - SBP 144 mmHg\n2. Patient 8737 (person_id: 8737) - SBP 143 mmHg\n3. Patient 6700 (person_id: 6700) - SBP 142 mmHg\n4. Patient 4191 (person_id: 4191) - SBP 143 mmHg\n5. Patient 11015 (person_id: 11015) - SBP 150 mmHg\n6. Patient 7459 (person_id: 7459) - SBP 145 mmHg\n7. Patient 8139 (person_id: 8139) - SBP 141 mmHg\n8. Patient 11504 (person_id: 11504) - SBP 144 mmHg\n9. Patient 3134 (person_id: 3134) - SBP 151 mmHg\n10. Patient 18 (person_id: 18) - SBP 142 mmHg\n11. Patient 5599 (person_id: 5599) - SBP 141 mmHg\n12. Patient 2132 (person_id: 2132) - SBP 141 mmHg\n13. Patient 6883 (person_id: 6883) - SBP 150 mmHg\n14. Patient 11258 (person_id: 11258) - SBP 144 mmHg\n15. Patient 7371 (person_id: 7371) - SBP 144 mmHg\n16. Patient 11171 (person_id: 11171) - SBP 148 mmHg\n17. Patient 2677 (person_id: 2677) - SBP 143 mmHg\n18. Patient 3691 (person_id: 3691) - SBP 142 mmHg\n19. Patient 5915 (person_id: 5915) - SBP 143 mmHg\n20. Patient 2003 (person_id: 2003) - SBP 147 mmHg\n\n**Total: 20 patients** meet the criteria of having Essential hypertension with SBP above 140 mmHg.",
     "patient_ids": [
-      140
+      7253,
+      8737,
+      6700,
+      4191,
+      11015,
+      7459,
+      8139,
+      11504,
+      3134,
+      18,
+      5599,
+      2132,
+      6883,
+      11258,
+      7371,
+      11171,
+      2677,
+      3691,
+      5915,
+      2003
     ],
-    "retrieved_count": 1
+    "retrieved_count": 20
   },
   "patients with Osteoporosis and BMI below 22": {
-    "answer": "Based on the provided patient records, I cannot identify any patients who meet both criteria of having Osteoporosis AND BMI below 22.\n\nPatient 2216 has Osteoporosis (person_id: 2216), but their BMI is 27.5 (person_id: 2216), which is above the 22 threshold specified in your question.\n\nNo other patients with Osteoporosis are included in the excerpts provided.",
+    "answer": "Based on the patient records provided, the patients with Osteoporosis and BMI below 22 are:\n\n1. **Patient 10328** - Osteoporosis diagnosis with BMI 17.2 (person_id: 10328)\n\n2. **Patient 2116** - Osteoporosis diagnosis with BMI 20.3 (person_id: 2116)\n\nPatient 1563 has Osteoporosis but no BMI measurement is provided in the excerpts, so I cannot confirm whether this patient meets the BMI criterion.",
     "patient_ids": [
-      2216
+      10328,
+      2116,
+      1563
     ],
-    "retrieved_count": 1
+    "retrieved_count": 4
   },
   "patients with Pulmonary embolism and SBP below 100": {
-    "answer": "Based on the patient record excerpts provided, there are **no patients with both Pulmonary embolism AND SBP below 100**.\n\nPatient 10390 has Pulmonary embolism (person_id: 10390), but their SBP is 136 mmHg, which is above 100 (person_id: 10390).",
+    "answer": "Based on the patient records provided, the following patients have both Pulmonary embolism AND SBP below 100 mmHg:\n\n1. **Patient 3805** (person_id: 3805) - SBP 87 mmHg\n2. **Patient 933** (person_id: 933) - SBP 98 mmHg\n3. **Patient 7281** (person_id: 7281) - SBP 94 mmHg\n4. **Patient 6593** (person_id: 6593) - SBP 82 mmHg\n5. **Patient 7795** (person_id: 7795) - SBP 87 mmHg\n\nThese five patients meet both criteria. Note that Patient 10605 has pulmonary embolism with SBP 98 mmHg (below 100), but was not included as the record shows \"SBP 98 mmHg\" which meets the criterion. Actually, **Patient 10605 should also be included** (person_id: 10605) - SBP 98 mmHg.",
     "patient_ids": [
-      10390
+      3805,
+      933,
+      7281,
+      10605,
+      6593,
+      3776,
+      2480,
+      7795
+    ],
+    "retrieved_count": 9
+  },
+  "patients with Atrial fibrillation and SBP above 150": {
+    "answer": "Based on the provided patient record excerpts, I can identify **one patient matching your criteria**:\n\n**Patient 4361** has both:\n- **Atrial fibrillation** (listed in conditions)\n- **SBP above 150 mmHg** (SBP 151 mmHg in latest labs)\n\nAdditional details: This is a female patient born in the 1920s, currently treated with Digoxin and Warfarin.",
+    "patient_ids": [
+      4361
     ],
     "retrieved_count": 1
   },
-  "patients with Atrial fibrillation and SBP above 150": {
-    "answer": "Based on the patient records provided, **no patients meet both criteria** (Atrial fibrillation AND SBP above 150).\n\nHere's why:\n\n- **Patient 150** (person_id: 150): Has SBP 116 mmHg, but no Atrial fibrillation diagnosis listed.\n- **Patient 149** (person_id: 149): Has SBP 130 mmHg (below 150), but no Atrial fibrillation diagnosis listed.\n- **Patient 1501** (person_id: 1501): Has SBP 113 mmHg, but no Atrial fibrillation diagnosis listed.\n\nNone of the patients in these excerpts have Atrial fibrillation documented, and none have SBP above 150 mmHg.",
-    "patient_ids": [
-      150,
-      149,
-      1501
-    ],
-    "retrieved_count": 3
-  },
   "patients with Hyperlipidemia and HbA1c above 7": {
-    "answer": "Based on the patient records provided, **no patients meet both criteria** of having Hyperlipidemia AND HbA1c above 7.\n\nHere's the breakdown:\n\nAll patients with Hyperlipidemia in these excerpts have HbA1c levels at or below 6.2%:\n\n- Patient 2807: Hyperlipidemia, HbA1c 6.1% (person_id: 2807)\n- Patient 4072: Hyperlipidemia, HbA1c 5.9% (person_id: 4072)\n- Patient 5076: Hyperlipidemia, HbA1c 6% (person_id: 5076)\n- Patient 7937: Hyperlipidemia, HbA1c 6.2% (person_id: 7937)\n- Patient 5091: Hyperlipidemia, HbA1c 6.2% (person_id: 5091)\n\nNone of these HbA1c values exceed 7.",
+    "answer": "Based on the patient records provided, here are the patients with both Hyperlipidemia and HbA1c above 7:\n\n1. **Patient 6211** (person_id: 6211) - Has Hyperlipidemia and HbA1c of 7.4%\n\n2. **Patient 4738** (person_id: 4738) - Has Hyperlipidemia and HbA1c of 7.3%\n\n3. **Patient 6597** (person_id: 6597) - Has Hyperlipidemia and HbA1c of 7.4%\n\nAll three patients meet both criteria.",
     "patient_ids": [
-      2807,
-      4072,
-      5076,
-      7937,
-      5091
+      6211,
+      4738,
+      6597
     ],
     "retrieved_count": 5
   },
   "patients with Congestive heart failure and SBP below 110": {
-    "answer": "Based on the patient records provided, I need to identify patients with both Congestive heart failure AND SBP below 110 mmHg.\n\nReviewing each patient:\n\n- **Patient 1106**: SBP 108 mmHg (below 110) \u2713, but no Congestive heart failure \u2717\n- **Patient 11083**: Has Anemia, not Congestive heart failure \u2717\n- **Patient 1100**: Has Anemia, not Congestive heart failure \u2717\n- **Patient 11454**: Has Congestive heart failure \u2713, but SBP 122 mmHg (not below 110) \u2717\n- **Patient 4283**: Has Congestive heart failure \u2713, but SBP 111 mmHg (not below 110) \u2717\n\n**Result: No patients in the provided records meet both criteria** (Congestive heart failure AND SBP below 110 mmHg).",
+    "answer": "Based on the patient records provided, the following patients have Congestive heart failure AND SBP below 110 mmHg:\n\n1. **Patient 3033** - SBP 97 mmHg (person_id: 3033)\n2. **Patient 113** - SBP 79 mmHg (person_id: 113)\n3. **Patient 3180** - SBP 91 mmHg (person_id: 3180)\n4. **Patient 727** - SBP 82 mmHg (person_id: 727)\n5. **Patient 9336** - SBP 84 mmHg (person_id: 9336)\n6. **Patient 4547** - SBP 97 mmHg (person_id: 4547)\n7. **Patient 3188** - SBP 95 mmHg (person_id: 3188)\n8. **Patient 6593** - SBP 82 mmHg (person_id: 6593)\n9. **Patient 8747** - SBP 83 mmHg (person_id: 8747)\n10. **Patient 9629** - SBP 92 mmHg (person_id: 9629)\n11. **Patient 10760** - SBP 83 mmHg (person_id: 10760)\n12. **Patient 8777** - SBP 67 mmHg (person_id: 8777)\n\nNote: Patients 1551, 4561, 10469, and 1156 have Congestive heart failure but their SBP readings are 106, not provided, not provided, and 103 mmHg respectively, so they do not meet the criteria of SBP below 110 (or in the case of 4561 and 10469, SBP data was not available in the excerpts).",
     "patient_ids": [
-      1106,
-      11083,
-      1100,
-      11454,
-      4283
+      3033,
+      113,
+      3180,
+      727,
+      9336,
+      4547,
+      3188,
+      10760,
+      6593,
+      8747,
+      1551,
+      4561,
+      10469,
+      1156,
+      9629,
+      8777
     ],
-    "retrieved_count": 5
+    "retrieved_count": 20
   },
   "patients with Streptococcal pharyngitis and BMI below 25": {
-    "answer": "Based on the patient records provided, there is **one patient with Streptococcal pharyngitis and BMI below 25**:\n\n- **Patient 11146** (person_id: 11146) - Male, born in the 2010s, with Streptococcal pharyngitis and BMI 24.6\n\nThe other patients with Streptococcal pharyngitis do not meet the BMI criterion:\n- Patient 8715 has BMI 25.3 (at or above 25)\n- Patient 9159 has BMI 27.7 (above 25)\n- Patient 5263 has BMI 29.6 (above 25)\n- Patient 2130 has BMI 28.4 (above 25)",
+    "answer": "# Patients with Streptococcal Pharyngitis and BMI Below 25\n\nBased on the provided records, the following patients meet both criteria:\n\n1. Patient 11146 (person_id: 11146) - BMI 24.6\n2. Patient 7201 (person_id: 7201) - BMI 19.9\n3. Patient 11465 (person_id: 11465) - BMI 23.2\n4. Patient 248 (person_id: 248) - BMI 22.4\n5. Patient 301 (person_id: 301) - BMI 19.6\n6. Patient 5195 (person_id: 5195) - BMI 18.1\n7. Patient 9563 (person_id: 9563) - BMI 20.6\n8. Patient 4956 (person_id: 4956) - BMI 17.4\n9. Patient 5014 (person_id: 5014) - BMI 23.3\n10. Patient 4664 (person_id: 4664) - BMI 21.4\n11. Patient 2340 (person_id: 2340) - BMI 16.8\n12. Patient 5460 (person_id: 5460) - BMI 23.2\n13. Patient 3730 (person_id: 3730) - BMI 22.4\n14. Patient 2339 (person_id: 2339) - BMI 20.7\n15. Patient 785 (person_id: 785) - BMI 15.8\n16. Patient 2804 (person_id: 2804) - BMI 24.4\n17. Patient 381 (person_id: 381) - BMI 22.5\n18. Patient 4025 (person_id: 4025) - BMI 22.9\n19. Patient 726 (person_id: 726) - BMI 17.1\n20. Patient 4708 (person_id: 4708) - BMI 22.3\n\n**Total: 20 patients** with Streptococcal pharyngitis and BMI below 25.",
     "patient_ids": [
-      8715,
-      9159,
-      5263,
       11146,
-      2130
+      7201,
+      11465,
+      248,
+      301,
+      5195,
+      9563,
+      4956,
+      5014,
+      4664,
+      2340,
+      5460,
+      3730,
+      2339,
+      785,
+      2804,
+      381,
+      4025,
+      726,
+      4708
     ],
-    "retrieved_count": 5
+    "retrieved_count": 20
   },
   "patients with Anemia and Glucose above 150": {
-    "answer": "Based on the provided patient records, **no patients meet both criteria** of having Anemia AND Glucose above 150 mg/dL.\n\nHere's why:\n\nAll patients with Anemia have glucose levels below 150 mg/dL:\n- Patient 1501: Anemia, Glucose 68.1 mg/dL (person_id: 1501)\n- Patient 149: Anemia, Glucose 75 mg/dL (person_id: 149)\n- Patient 1508: Anemia, Glucose 85.3 mg/dL (person_id: 1508)\n- Patient 1504: Anemia, Glucose 90.1 mg/dL (person_id: 1504)\n- Patient 1450: Anemia, Glucose 65.7 mg/dL (person_id: 1450)",
+    "answer": "# Patients with Anemia and Glucose above 150\n\nBased on the provided records, the following patients have both Anemia and Glucose levels above 150 mg/dL:\n\n1. **Patient 6452** - Anemia, Glucose 188.1 mg/dL (person_id: 6452)\n2. **Patient 9675** - Anemia, Glucose 161.6 mg/dL (person_id: 9675)\n3. **Patient 3405** - Anemia, Glucose 195.4 mg/dL (person_id: 3405)\n4. **Patient 9119** - Anemia, Glucose 171.9 mg/dL (person_id: 9119)\n5. **Patient 9691** - Anemia, Glucose 155.5 mg/dL (person_id: 9691)\n6. **Patient 438** - Anemia, Glucose 159.9 mg/dL (person_id: 438)\n7. **Patient 798** - Anemia, Glucose 182 mg/dL (person_id: 798)\n8. **Patient 1763** - Anemia, Glucose 160.9 mg/dL (person_id: 1763)\n9. **Patient 11557** - Anemia listed as condition, but glucose value not provided in record excerpt (person_id: 11557)\n\nNote: Several other patients have glucose readings above 150, but their records do not explicitly document an Anemia diagnosis.",
     "patient_ids": [
-      1501,
-      149,
-      1508,
-      1504,
-      1450
+      6452,
+      9675,
+      3405,
+      9119,
+      9691,
+      7811,
+      438,
+      7532,
+      5222,
+      891,
+      8314,
+      1763,
+      4378,
+      3024,
+      2222,
+      798,
+      1702,
+      11557
     ],
-    "retrieved_count": 5
+    "retrieved_count": 20
   },
   "patients with lung cancer and SBP above 220": {
     "answer": "I don't know - I couldn't find any patient records relevant to that question.",
