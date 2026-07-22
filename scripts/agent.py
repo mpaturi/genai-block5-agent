@@ -112,8 +112,16 @@ def run_agent(
 
     def search_node(state: AgentState) -> dict:
         try:
-            query_text = build_rag_query(state["question"])
-            result = search_fn(query_text, top_k=5)
+            question_input = state["question"]
+            query_text = build_rag_query(question_input)
+            result = search_fn(
+                query_text,
+                question_input.condition,
+                question_input.lab,
+                question_input.comparison,
+                question_input.value,
+                top_k=20,
+            )
             return {"rag_result": result, "rag_error": None}
         except RAGServiceError as exc:
             return {

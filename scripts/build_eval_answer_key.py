@@ -73,11 +73,22 @@ RETURN d.drug_name AS drug, count(DISTINCT p) AS patient_count
 def _search(question: QuestionInput) -> list[int]:
     # Built from condition/lab/comparison/value only, never drug_a/drug_b,
     # via the one shared function - never a second, separate implementation
-    # of this formatting (see docs/spec.md's Tool 1).
+    # of this formatting (see docs/spec.md's Tool 1). condition/lab/
+    # comparison/value are also forwarded as structured metadata filter
+    # fields, identically to rag_tool.py's search_patients() - otherwise
+    # this script would build its golden answers from a different,
+    # unfiltered candidate set than what the real agent retrieves.
     query_text = build_rag_query(question)
     response = requests.post(
         f"{RAG_API_URL}/query",
-        json={"question": query_text, "top_k": 5},
+        json={
+            "question": query_text,
+            "top_k": 20,
+            "condition": question.condition,
+            "lab": question.lab,
+            "comparison": question.comparison,
+            "value": question.value,
+        },
         timeout=10,
     )
     response.raise_for_status()

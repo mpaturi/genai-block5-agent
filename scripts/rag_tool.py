@@ -1,7 +1,12 @@
 """Tool 1 - semantic patient search (see docs/spec.md's Tool 1).
 
-Wraps Block 4's existing POST /query endpoint. Does not retry - retry
-policy lives in the agent (see docs/spec.md's Agent steps).
+Wraps Block 4's existing POST /query endpoint. Sends condition/lab/
+comparison/value as structured metadata filter fields alongside the
+free-text query, so Block 4 can narrow results to patients whose
+graph-derived metadata actually matches (see Block 4's Phase 7 filter
+work), not just patients whose record text is semantically similar. Does
+not retry - retry policy lives in the agent (see docs/spec.md's Agent
+steps).
 """
 import os
 
@@ -30,14 +35,28 @@ class RAGServiceError(Exception):
         self.retryable = retryable
 
 
-def search_patients(query_text: str, top_k: int = 5) -> dict:
+def search_patients(
+    query_text: str,
+    condition: str,
+    lab: str,
+    comparison: str,
+    value: float,
+    top_k: int = 20,
+) -> dict:
     if not (1 <= top_k <= 20):
         raise RAGServiceError("invalid_top_k", retryable=False)
 
     try:
         response = requests.post(
             f"{RAG_API_URL}/query",
-            json={"question": query_text, "top_k": top_k},
+            json={
+                "question": query_text,
+                "top_k": top_k,
+                "condition": condition,
+                "lab": lab,
+                "comparison": comparison,
+                "value": value,
+            },
             timeout=10,
         )
     except requests.exceptions.RequestException:
