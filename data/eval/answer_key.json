@@ -45,7 +45,7 @@
       "Insulin": 1
     },
     "patients_checked": 3,
-    "confidence": "medium"
+    "confidence": "low"
   },
   "q3": {
     "rag_patient_ids": [
@@ -62,7 +62,7 @@
       "Enoxaparin": 5
     },
     "patients_checked": 8,
-    "confidence": "high"
+    "confidence": "low"
   },
   "q4": {
     "rag_patient_ids": [
@@ -87,7 +87,7 @@
       "Amlodipine": 1
     },
     "patients_checked": 3,
-    "confidence": "medium"
+    "confidence": "low"
   },
   "q6": {
     "rag_patient_ids": [
@@ -120,7 +120,7 @@
       "Insulin": 1
     },
     "patients_checked": 16,
-    "confidence": "high"
+    "confidence": "medium"
   },
   "q7": {
     "rag_patient_ids": [
@@ -182,6 +182,6 @@
       "Amlodipine": 5
     },
     "patients_checked": 18,
-    "confidence": "high"
+    "confidence": "medium"
   }
 }

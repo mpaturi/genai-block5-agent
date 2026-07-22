@@ -113,15 +113,21 @@ def dedupe_and_order_patient_ids(sources: list[dict]) -> list[int]:
 def compute_confidence(patients_checked: int) -> Confidence:
     """The one shared confidence rule (see docs/spec.md's Structured output).
 
-    Fewer than 3 patients checked is `low`, 3 or 4 is `medium`, 5 or more is
-    `high` - calibrated against Tool 1's default of 5 results per question.
-    Both agent.py (the real run) and build_eval_answer_key.py (the golden
-    answer key) call this, so an off-by-one on the tier boundaries can never
-    silently diverge between the two.
+    Fewer than 12 patients checked is `low`, 12 to 19 is `medium`, 20 (Tool
+    1's top_k=20 ceiling - the most Tool 2 can ever be handed) is `high`.
+    These are the original thresholds (low <3, medium 3-4, high >=5) scaled
+    by the same 4x factor Tool 1's default top_k grew by (5 -> 20), so
+    `high` keeps its original meaning - reachable at the tool's actual
+    operating ceiling, not trivially easy, and not practically unreachable
+    (see docs/spec.md's Structured output section for the real, measured
+    per-question counts these boundaries are grounded in). Both agent.py
+    (the real run) and build_eval_answer_key.py (the golden answer key)
+    call this, so an off-by-one on the tier boundaries can never silently
+    diverge between the two.
     """
-    if patients_checked < 3:
+    if patients_checked < 12:
         return "low"
-    if patients_checked < 5:
+    if patients_checked < 20:
         return "medium"
     return "high"
 
