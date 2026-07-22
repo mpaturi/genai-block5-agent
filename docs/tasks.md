@@ -110,3 +110,32 @@ looks like.
 - [ ] Revert that too — confirm the build is back to green before
       continuing
 - [ ] Commit, push, open PR (base `phase-3-implement`)
+
+## Phase 5 — RAG filter wiring (`phase-5-rag-filter-wiring`, base: `phase-4-ci`)
+
+- [x] Update `docs/spec.md`: Tool 1's default `top_k` raised to 20,
+      documented the new metadata filter fields sent to Block 4's `/query`
+      (`condition`/`lab`/`comparison`/`value`), added TODO markers on the
+      two now-obsolete recall paragraphs (numbers not guessed, left for
+      Phase 6)
+- [x] Extend `scripts/rag_tool.py`'s `search_patients()` to forward
+      `condition`/`lab`/`comparison`/`value` as structured filter fields to
+      Block 4's `/query`, alongside the free-text query
+- [x] Update `scripts/agent.py`'s `search_node` to pass the question's
+      filter fields through and call at `top_k=20`
+- [x] Update `scripts/build_eval_answer_key.py` to forward the same filter
+      fields, so the golden answer key is built from the same candidate
+      set the real agent now retrieves
+- [x] Confirm the locally running RAG service was serving stale,
+      pre-filter Block 4 code before trusting any of the above — restarted
+      it from Block 4's `phase-7-metadata-filter` branch, confirmed via
+      `/openapi.json` that the filter fields are actually exposed
+- [x] Recapture `data/eval/rag_fixtures.json` and regenerate
+      `data/eval/answer_key.json` against the live, filter-aware service
+- [x] Update `tests/test_rag_tool.py`, `tests/test_agent_answers.py`, and
+      `scripts/run_eval.py` for the new signature and `top_k` — all 21
+      tests pass, fixture-mode eval scores 11/11
+- [x] Measure real recall directly against the graph for all 8 answerable
+      questions (not borrowed from Block 4's eval) — mean recall 0.761, up
+      from 0.000/0.059, every question now finds at least one real match
+- [x] Commit, push, open PR (base `phase-4-ci`)
