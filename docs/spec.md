@@ -113,12 +113,25 @@ answerable questions is **0.000**. Concretely: "Essential hypertension,
 SBP > 140" has 99 real matching patients in the graph, and search returns
 zero of them.
 
+**TODO (Branch 2):** the paragraph above is now obsolete. Tool 1's default
+`top_k` is 20 (up from 5) and Block 4's Phase 7 filter is now applied
+(see Tool 1 above), so the `0.000` figure measured at the old `top_k=5`,
+unfiltered setting no longer reflects real behavior. This needs to be
+rewritten with real, remeasured numbers once they're confirmed stable —
+not guessed here.
+
 Raising `top_k` was investigated as a possible mitigation, and ruled out
 with evidence rather than assumed: Block 4's API hard-rejects any `top_k`
 above 20 (HTTP 422, confirmed by a live call), so 20 is a real ceiling,
 not a setting this project simply chose not to raise. Even at that
 ceiling, mean recall only reaches 0.059, with 5 of the 8 questions still
 finding zero real matches at any setting tested.
+
+**TODO (Branch 2):** the paragraph above is also now obsolete — it
+concluded raising `top_k` was "ruled out," but that conclusion no longer
+holds now that Block 4's Phase 7 filter makes a higher `top_k` safe (see
+Tool 1 above). This needs to be rewritten once real numbers are
+re-measured at the new setting.
 
 This was also spot-checked by hand for confidence, not just trusted from
 the measurement script: confirmed directly against the graph that exactly
@@ -157,7 +170,7 @@ nothing matched.
 
 | | |
 |---|---|
-| Input | a question, and how many results to return (1–20, default 5) |
+| Input | a question, and how many results to return (1–20, default 20) |
 | Output (match) | a short prose answer, a list of matching patients, how many were found |
 | Output (no match) | an explicit "nothing found" result — not an error |
 | Output (failure) | a clear error, distinguishing "service down" from "bad input" |
@@ -175,11 +188,16 @@ follow this rule, and since RAG's matching is semantic, that drift could
 silently change which patients come back — which is exactly the kind of
 mismatch the golden answer key is supposed to catch, not cause.
 
-The agent always calls this tool at its default of 5 results; it never
-overrides that number. This isn't optional: the confidence tiers (see
-Structured output) are calibrated specifically against 5 being the
-normal number of patients found, so a different number here would
-silently throw off what "high confidence" is supposed to mean.
+The agent now calls this tool at its default of 20 results — up from
+5 — every time; it never overrides that number.
+
+Tool 1 also sends the question's `condition`, `lab`, `comparison`, and
+`value` fields to Block 4's API as structured metadata filter fields, not
+just embedded in the free-text query built above. Block 4 uses these to
+narrow results to patients whose own graph-derived metadata actually
+matches — not just patients whose record text is semantically similar —
+per Block 4's Phase 7 filter work (see also Important honesty point
+below).
 
 The agent does not retry inside the tool itself — retries happen at the
 agent level (see Agent steps).
