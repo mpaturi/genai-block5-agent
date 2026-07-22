@@ -39,7 +39,7 @@ jobs:
         run: python -m scripts.load_ci_graph_seed
 
       - name: Run tests
-        run: pytest
+        run: python -m pytest
 
       # USE_RAG_FIXTURES replays scripts/capture_rag_fixtures.py's recorded
       # responses instead of calling the live RAG service, which CI has no
