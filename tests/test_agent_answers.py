@@ -29,14 +29,19 @@ QUESTION = QuestionInput(
 
 
 class _CountingFake:
-    """Wraps a function and records how many times it was called."""
+    """Wraps a function and records how many times it was called, and with
+    what arguments - so tests can assert the agent forwards the right
+    filter fields, not just that it was called the right number of times.
+    """
 
     def __init__(self, fn):
         self._fn = fn
         self.call_count = 0
+        self.calls = []
 
     def __call__(self, *args, **kwargs):
         self.call_count += 1
+        self.calls.append((args, kwargs))
         return self._fn(*args, **kwargs)
 
 
@@ -49,7 +54,7 @@ def _always_raise(exc):
 
 def test_nothing_found_short_circuits_to_fixed_fallback_answer():
     search_fn = _CountingFake(
-        lambda query_text, top_k=5: {
+        lambda query_text, condition, lab, comparison, value, top_k=20: {
             "answer": "I don't know — I couldn't find any patient records relevant to that question.",
             "patient_ids": [],
             "retrieved_count": 0,
@@ -60,6 +65,12 @@ def test_nothing_found_short_circuits_to_fixed_fallback_answer():
     answer, count_step_ran = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
 
     assert search_fn.call_count == 1
+    # The agent forwards top_k=20 (up from 5) and the question's
+    # condition/lab/comparison/value as structured filter fields, the same
+    # pattern already used for the graph tool's count_fn.
+    call_args, call_kwargs = search_fn.calls[0]
+    assert call_args[1:] == (QUESTION.condition, QUESTION.lab, QUESTION.comparison, QUESTION.value)
+    assert call_kwargs == {"top_k": 20}
     assert count_step_ran is False
     assert answer.question == assemble_question_text(QUESTION)
     assert answer.answer == (
@@ -95,7 +106,7 @@ def test_search_step_broken_after_retries_returns_fixed_error_answer():
 
 def test_graph_step_broken_after_retries_returns_degraded_answer():
     search_fn = _CountingFake(
-        lambda query_text, top_k=5: {
+        lambda query_text, condition, lab, comparison, value, top_k=20: {
             "answer": "some patients matched",
             "patient_ids": [1, 2, 3],
             "retrieved_count": 3,
@@ -126,7 +137,7 @@ def test_graph_step_broken_after_retries_returns_degraded_answer():
 
 def test_answer_step_failed_after_one_retry_returns_fixed_answer():
     search_fn = _CountingFake(
-        lambda query_text, top_k=5: {
+        lambda query_text, condition, lab, comparison, value, top_k=20: {
             "answer": "some patients matched",
             "patient_ids": [1, 2, 3],
             "retrieved_count": 3,

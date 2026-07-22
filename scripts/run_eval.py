@@ -25,7 +25,9 @@ def _make_fixture_search_fn():
     search step is faked; count_fn and answer_fn always stay real."""
     fixtures = json.loads(FIXTURES_PATH.read_text())
 
-    def _search_fn(query_text: str, top_k: int = 5) -> dict:
+    def _search_fn(
+        query_text: str, condition=None, lab=None, comparison=None, value=None, top_k: int = 20
+    ) -> dict:
         if query_text not in fixtures:
             raise RuntimeError(
                 f"USE_RAG_FIXTURES is set, but no fixture is recorded for query "
