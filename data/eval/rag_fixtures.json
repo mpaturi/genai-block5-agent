@@ -1,0 +1,91 @@
+{
+  "patients with Essential hypertension and SBP above 140": {
+    "answer": "Based on the provided patient records, I cannot identify any patients meeting both criteria of Essential hypertension AND SBP above 140.\n\nPatient 140 has an SBP of 89 mmHg, which does not meet the SBP > 140 threshold. Additionally, while Patient 140 has documented conditions (Hyperlipidemia and Diabetes mellitus type 2), Essential hypertension is not listed among them.\n\nTo answer your question properly, I would need access to patient records that include:\n1. A diagnosis of Essential hypertension documented in the conditions list\n2. A recorded SBP measurement greater than 140 mmHg",
+    "patient_ids": [
+      140
+    ],
+    "retrieved_count": 1
+  },
+  "patients with Osteoporosis and BMI below 22": {
+    "answer": "Based on the provided patient records, I cannot identify any patients who meet both criteria of having Osteoporosis AND BMI below 22.\n\nPatient 2216 has Osteoporosis (person_id: 2216), but their BMI is 27.5 (person_id: 2216), which is above the 22 threshold specified in your question.\n\nNo other patients with Osteoporosis are included in the excerpts provided.",
+    "patient_ids": [
+      2216
+    ],
+    "retrieved_count": 1
+  },
+  "patients with Pulmonary embolism and SBP below 100": {
+    "answer": "Based on the patient record excerpts provided, there are **no patients with both Pulmonary embolism AND SBP below 100**.\n\nPatient 10390 has Pulmonary embolism (person_id: 10390), but their SBP is 136 mmHg, which is above 100 (person_id: 10390).",
+    "patient_ids": [
+      10390
+    ],
+    "retrieved_count": 1
+  },
+  "patients with Atrial fibrillation and SBP above 150": {
+    "answer": "Based on the patient records provided, **no patients meet both criteria** (Atrial fibrillation AND SBP above 150).\n\nHere's why:\n\n- **Patient 150** (person_id: 150): Has SBP 116 mmHg, but no Atrial fibrillation diagnosis listed.\n- **Patient 149** (person_id: 149): Has SBP 130 mmHg (below 150), but no Atrial fibrillation diagnosis listed.\n- **Patient 1501** (person_id: 1501): Has SBP 113 mmHg, but no Atrial fibrillation diagnosis listed.\n\nNone of the patients in these excerpts have Atrial fibrillation documented, and none have SBP above 150 mmHg.",
+    "patient_ids": [
+      150,
+      149,
+      1501
+    ],
+    "retrieved_count": 3
+  },
+  "patients with Hyperlipidemia and HbA1c above 7": {
+    "answer": "Based on the patient records provided, **no patients meet both criteria** of having Hyperlipidemia AND HbA1c above 7.\n\nHere's the breakdown:\n\nAll patients with Hyperlipidemia in these excerpts have HbA1c levels at or below 6.2%:\n\n- Patient 2807: Hyperlipidemia, HbA1c 6.1% (person_id: 2807)\n- Patient 4072: Hyperlipidemia, HbA1c 5.9% (person_id: 4072)\n- Patient 5076: Hyperlipidemia, HbA1c 6% (person_id: 5076)\n- Patient 7937: Hyperlipidemia, HbA1c 6.2% (person_id: 7937)\n- Patient 5091: Hyperlipidemia, HbA1c 6.2% (person_id: 5091)\n\nNone of these HbA1c values exceed 7.",
+    "patient_ids": [
+      2807,
+      4072,
+      5076,
+      7937,
+      5091
+    ],
+    "retrieved_count": 5
+  },
+  "patients with Congestive heart failure and SBP below 110": {
+    "answer": "Based on the patient records provided, I need to identify patients with both Congestive heart failure AND SBP below 110 mmHg.\n\nReviewing each patient:\n\n- **Patient 1106**: SBP 108 mmHg (below 110) \u2713, but no Congestive heart failure \u2717\n- **Patient 11083**: Has Anemia, not Congestive heart failure \u2717\n- **Patient 1100**: Has Anemia, not Congestive heart failure \u2717\n- **Patient 11454**: Has Congestive heart failure \u2713, but SBP 122 mmHg (not below 110) \u2717\n- **Patient 4283**: Has Congestive heart failure \u2713, but SBP 111 mmHg (not below 110) \u2717\n\n**Result: No patients in the provided records meet both criteria** (Congestive heart failure AND SBP below 110 mmHg).",
+    "patient_ids": [
+      1106,
+      11083,
+      1100,
+      11454,
+      4283
+    ],
+    "retrieved_count": 5
+  },
+  "patients with Streptococcal pharyngitis and BMI below 25": {
+    "answer": "Based on the patient records provided, there is **one patient with Streptococcal pharyngitis and BMI below 25**:\n\n- **Patient 11146** (person_id: 11146) - Male, born in the 2010s, with Streptococcal pharyngitis and BMI 24.6\n\nThe other patients with Streptococcal pharyngitis do not meet the BMI criterion:\n- Patient 8715 has BMI 25.3 (at or above 25)\n- Patient 9159 has BMI 27.7 (above 25)\n- Patient 5263 has BMI 29.6 (above 25)\n- Patient 2130 has BMI 28.4 (above 25)",
+    "patient_ids": [
+      8715,
+      9159,
+      5263,
+      11146,
+      2130
+    ],
+    "retrieved_count": 5
+  },
+  "patients with Anemia and Glucose above 150": {
+    "answer": "Based on the provided patient records, **no patients meet both criteria** of having Anemia AND Glucose above 150 mg/dL.\n\nHere's why:\n\nAll patients with Anemia have glucose levels below 150 mg/dL:\n- Patient 1501: Anemia, Glucose 68.1 mg/dL (person_id: 1501)\n- Patient 149: Anemia, Glucose 75 mg/dL (person_id: 149)\n- Patient 1508: Anemia, Glucose 85.3 mg/dL (person_id: 1508)\n- Patient 1504: Anemia, Glucose 90.1 mg/dL (person_id: 1504)\n- Patient 1450: Anemia, Glucose 65.7 mg/dL (person_id: 1450)",
+    "patient_ids": [
+      1501,
+      149,
+      1508,
+      1504,
+      1450
+    ],
+    "retrieved_count": 5
+  },
+  "patients with lung cancer and SBP above 220": {
+    "answer": "I don't know - I couldn't find any patient records relevant to that question.",
+    "patient_ids": [],
+    "retrieved_count": 0
+  },
+  "patients with schizophrenia and Glucose above 300": {
+    "answer": "I don't know - I couldn't find any patient records relevant to that question.",
+    "patient_ids": [],
+    "retrieved_count": 0
+  },
+  "patients with appendicitis and HbA1c above 13": {
+    "answer": "I don't know - I couldn't find any patient records relevant to that question.",
+    "patient_ids": [],
+    "retrieved_count": 0
+  }
+}
