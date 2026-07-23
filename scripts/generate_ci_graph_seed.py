@@ -38,6 +38,22 @@ has no way to exclude data that was really set for a different task's
 purposes. A shared patient still gets its :Patient node either way; it
 just never gets anything that could make it incorrectly pass verification
 or incorrectly count toward a drug, for any task.
+
+Everything above is derived from answer_key.json, so it can only ever
+reproduce a count graph_tool.py's own verify+count logic already
+computed - it can't catch a real bug in that logic (an AND that
+regressed to an OR, the wrong lab property, a dropped clause), since the
+seed would just be regenerated to match whatever the buggy code produces.
+_EDGE_CASE_PERSON_ID below is the one exception: a hand-written patient,
+not derived from any answer, who genuinely has an answerable task's
+condition but deliberately fails its lab check, carrying a drug name
+used nowhere else in the seed. Every real, RAG-derived patient ID across
+all of data/eval/rag_fixtures.json - not just the ones this script ends
+up seeding - falls between 140 and 11454. _EDGE_CASE_PERSON_ID is
+deliberately far outside that range so it's obviously synthetic, never
+mistaken for a real patient later. See
+tests/test_graph_tool_integration.py for the test this fixture exists
+to support.
 """
 import json
 from pathlib import Path
@@ -61,6 +77,14 @@ _LAB_PROPERTY = {
 # A satisfying value is the task's threshold shifted by this margin, in
 # the direction that satisfies a strict >/< comparison.
 _SATISFYING_MARGIN = 1
+
+# Hand-written "should be excluded" fixture (see module docstring) - reused
+# by tests/test_graph_tool_integration.py, so change these together with
+# that test if they ever move.
+_EDGE_CASE_TASK_ID = "q7"  # Streptococcal pharyngitis / BMI below 25
+_EDGE_CASE_PERSON_ID = 900001
+_EDGE_CASE_LAB_VALUE = 30  # clearly fails "below 25" - not a near-miss
+_EDGE_CASE_DRUG_NAME = "ZZZ_Test_Excluded_Drug"
 
 
 def _assign_patients_to_drugs(patient_ids: list[int], graph_result: dict) -> list[tuple[int, str]]:
@@ -163,6 +187,19 @@ def main() -> None:
         for person_id, drug_name in _assign_patients_to_drugs(verified_ids, graph_result):
             drug_names_seen.setdefault(drug_name, None)
             prescribed_pairs_seen.setdefault((person_id, drug_name), None)
+
+    # See the module docstring and Leone's PR #4 review: this one patient
+    # is hand-written, not derived from answer_key.json above, precisely
+    # so it can catch a bug the derivation above never could.
+    edge_case_task = next(t for t in answerable_tasks if t["id"] == _EDGE_CASE_TASK_ID)
+    edge_case_lab_property = _LAB_PROPERTY[edge_case_task["lab"]]
+    patient_ids_seen.setdefault(_EDGE_CASE_PERSON_ID, None)
+    patient_lab_property[_EDGE_CASE_PERSON_ID] = (edge_case_lab_property, _EDGE_CASE_LAB_VALUE)
+    has_condition_pairs_seen.setdefault(
+        (_EDGE_CASE_PERSON_ID, edge_case_task["condition"]), None
+    )
+    drug_names_seen.setdefault(_EDGE_CASE_DRUG_NAME, None)
+    prescribed_pairs_seen.setdefault((_EDGE_CASE_PERSON_ID, _EDGE_CASE_DRUG_NAME), None)
 
     lines = []
     for person_id in patient_ids_seen:
