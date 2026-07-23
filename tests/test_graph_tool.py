@@ -5,7 +5,10 @@ contract count_drugs() must satisfy. All should fail with an ImportError
 until Phase 3 implements it. The Neo4j driver is faked throughout, so none
 of this needs a real graph database running.
 """
-from scripts.graph_tool import GraphServiceError, count_drugs
+from neo4j import Query
+from neo4j.exceptions import ClientError
+
+from scripts.graph_tool import GRAPH_QUERY_TIMEOUT, GraphServiceError, count_drugs
 
 _CONDITION = "Essential hypertension"
 _LAB = "SBP"
@@ -36,7 +39,12 @@ class _FakeSession:
     def run(self, query, **params):
         if self._raise_exc is not None:
             raise self._raise_exc
-        if "verified_ids" in query:
+        # The real driver has no timeout kwarg on run() - a bounded query
+        # must arrive wrapped in a Query object carrying the timeout, so
+        # every call this tool makes is checked against that shape here.
+        assert isinstance(query, Query), "query must be wrapped in neo4j.Query"
+        assert query.timeout == GRAPH_QUERY_TIMEOUT
+        if "verified_ids" in query.text:
             return _FakeResult([{"verified_ids": self._verified_ids}])
         return _FakeResult(self._count_rows)
 
@@ -137,6 +145,26 @@ def test_count_drugs_raises_graph_service_error_on_driver_failure():
         assert False, "expected GraphServiceError"
     except GraphServiceError as exc:
         assert exc.detail == "RuntimeError"
+        assert exc.retryable is True
+
+
+def test_count_drugs_raises_graph_service_error_on_timeout():
+    # A slow query fails the same way a slow RAG call already does (see
+    # docs/spec.md's "Agent steps") - a driver-raised timeout must be
+    # caught by the same broad except and treated as retryable, not as
+    # bad input.
+    driver = _FakeDriver(
+        raise_exc=ClientError(
+            "Neo.ClientError.Transaction.TransactionTimedOut: "
+            "The transaction has been terminated"
+        )
+    )
+
+    try:
+        _count_drugs([1, 2, 3], driver=driver)
+        assert False, "expected GraphServiceError"
+    except GraphServiceError as exc:
+        assert exc.detail == "ClientError"
         assert exc.retryable is True
 
 
