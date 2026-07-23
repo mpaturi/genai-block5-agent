@@ -150,6 +150,40 @@ def test_search_patients_raises_on_unexpected_status(monkeypatch):
         assert exc.detail == "unexpected_status_500"
 
 
+def test_search_patients_raises_on_invalid_filter_422(monkeypatch):
+    # FastAPI's default 422 body is a list of validation error objects,
+    # not a plain string - unlike the 502 branch, nothing here should be
+    # read out of it.
+    body = {
+        "detail": [
+            {
+                "type": "missing",
+                "loc": ["body", "comparison"],
+                "msg": "Field required",
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        "scripts.rag_tool.requests.post",
+        lambda *a, **k: _FakeResponse(422, body),
+    )
+
+    try:
+        search_patients(
+            "patients with hypertension and SBP above 140",
+            "hypertension",
+            "SBP",
+            "above",
+            140,
+            top_k=20,
+        )
+        assert False, "expected RAGServiceError"
+    except RAGServiceError as exc:
+        assert exc.detail == "invalid_filter_request"
+        # Bad input, not a temporary problem - retrying won't fix it.
+        assert exc.retryable is False
+
+
 def test_search_patients_rejects_bad_top_k_before_any_http_call(monkeypatch):
     def _fail_if_called(*args, **kwargs):
         raise AssertionError("should not make an HTTP call for invalid top_k")

@@ -74,4 +74,13 @@ def search_patients(
         detail = response.json().get("detail", "unknown")
         raise RAGServiceError(detail)
 
+    if response.status_code == 422:
+        # Block 4 rejected the structured filter itself (bad lab/comparison
+        # value, or a partial lab/comparison/value combo) - retrying the
+        # identical request would fail identically. FastAPI's default 422
+        # body is a list of validation error objects, not a plain string
+        # like the 502 branch's detail field, so there's nothing useful to
+        # extract here - use a fixed detail instead.
+        raise RAGServiceError("invalid_filter_request", retryable=False)
+
     raise RAGServiceError(f"unexpected_status_{response.status_code}")
