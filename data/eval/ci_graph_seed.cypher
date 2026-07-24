@@ -99,6 +99,7 @@ CREATE (:Patient {person_id: 798, latest_glucose: 151});
 CREATE (:Patient {person_id: 1702, latest_glucose: 151});
 CREATE (:Patient {person_id: 11557, latest_glucose: 151});
 CREATE (:Patient {person_id: 6707, latest_glucose: 151});
+CREATE (:Patient {person_id: 900001, latest_bmi: 30});
 MERGE (:Condition {condition_name: 'Essential hypertension'});
 MERGE (:Condition {condition_name: 'Osteoporosis'});
 MERGE (:Condition {condition_name: 'Pulmonary embolism'});
@@ -119,6 +120,7 @@ MERGE (:Drug {drug_name: 'Warfarin'});
 MERGE (:Drug {drug_name: 'Simvastatin'});
 MERGE (:Drug {drug_name: 'Metformin'});
 MERGE (:Drug {drug_name: 'Carvedilol'});
+MERGE (:Drug {drug_name: 'ZZZ_Test_Excluded_Drug'});
 MATCH (p:Patient {person_id: 7253}), (c:Condition {condition_name: 'Essential hypertension'}) CREATE (p)-[:HAS_CONDITION]->(c);
 MATCH (p:Patient {person_id: 8737}), (c:Condition {condition_name: 'Essential hypertension'}) CREATE (p)-[:HAS_CONDITION]->(c);
 MATCH (p:Patient {person_id: 6700}), (c:Condition {condition_name: 'Essential hypertension'}) CREATE (p)-[:HAS_CONDITION]->(c);
@@ -221,6 +223,7 @@ MATCH (p:Patient {person_id: 798}), (c:Condition {condition_name: 'Anemia'}) CRE
 MATCH (p:Patient {person_id: 1702}), (c:Condition {condition_name: 'Anemia'}) CREATE (p)-[:HAS_CONDITION]->(c);
 MATCH (p:Patient {person_id: 11557}), (c:Condition {condition_name: 'Anemia'}) CREATE (p)-[:HAS_CONDITION]->(c);
 MATCH (p:Patient {person_id: 6707}), (c:Condition {condition_name: 'Anemia'}) CREATE (p)-[:HAS_CONDITION]->(c);
+MATCH (p:Patient {person_id: 900001}), (c:Condition {condition_name: 'Streptococcal pharyngitis'}) CREATE (p)-[:HAS_CONDITION]->(c);
 MATCH (p:Patient {person_id: 7253}), (d:Drug {drug_name: 'Amlodipine'}) CREATE (p)-[:PRESCRIBED]->(d);
 MATCH (p:Patient {person_id: 8737}), (d:Drug {drug_name: 'Amlodipine'}) CREATE (p)-[:PRESCRIBED]->(d);
 MATCH (p:Patient {person_id: 6700}), (d:Drug {drug_name: 'Amlodipine'}) CREATE (p)-[:PRESCRIBED]->(d);
@@ -338,3 +341,4 @@ MATCH (p:Patient {person_id: 7811}), (d:Drug {drug_name: 'Amlodipine'}) CREATE (
 MATCH (p:Patient {person_id: 6452}), (d:Drug {drug_name: 'Insulin'}) CREATE (p)-[:PRESCRIBED]->(d);
 MATCH (p:Patient {person_id: 9675}), (d:Drug {drug_name: 'Insulin'}) CREATE (p)-[:PRESCRIBED]->(d);
 MATCH (p:Patient {person_id: 3405}), (d:Drug {drug_name: 'Insulin'}) CREATE (p)-[:PRESCRIBED]->(d);
+MATCH (p:Patient {person_id: 900001}), (d:Drug {drug_name: 'ZZZ_Test_Excluded_Drug'}) CREATE (p)-[:PRESCRIBED]->(d);

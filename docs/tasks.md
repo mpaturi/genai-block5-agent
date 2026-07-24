@@ -219,7 +219,8 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       CI's `neo4j:5.18-community` service) — full test suite (21/21) and
       `run_eval.py` in fixture mode both pass, score back to 1.000
       (11/11). Commit, push
-- [ ] **Known gap, tracked, not silently dropped:** the hand-written
+- [x] **Known gap, tracked, not silently dropped — resolved on Phase 8,
+      see that section.** The hand-written
       edge-case regression patient from Phase 4 (`_EDGE_CASE_PERSON_ID =
       900001` / `ZZZ_Test_Excluded_Drug`, commit `2af8057` on
       `phase-4-ci`, exercised by `tests/test_graph_tool_integration.py`)
@@ -237,3 +238,66 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       design work against that shared-patient/combined-constraint logic,
       not a mechanical re-application of the old diff — do this as its
       own follow-up, not bundled into a CI fix
+
+## Phase 8 — Expose outcome (`phase-8-expose-outcome`, base: `phase-7-filtered-top-k-ceiling`)
+
+- [x] Added `outcome: Literal["answered", "nothing_found", "tool_error"]`
+      to `ClinicalAnswer` (`scripts/schemas.py`), threaded through
+      `scripts/agent.py`'s five construction sites from the outcome value
+      each one already computed, so a caller (a future Block 6
+      orchestrator) can tell a genuine tool failure apart from a
+      legitimate low-confidence success without parsing `caveat`'s free
+      text. Searched for every place that constructs or depends on
+      `ClinicalAnswer`'s shape (`build_eval_answer_key.py`,
+      `run_eval.py`) rather than assuming — neither constructs one, so
+      neither needed changes. Documented in `docs/spec.md`'s Structured
+      output section
+- [x] **This branch chain never merged to `main`, so before it does:
+      confirmed, via `git merge-base --is-ancestor`, not assumed, that
+      two fixes built and reviewed on sibling branches were never
+      actually inherited here.** Both `phase-5-rag-filter-wiring` and
+      `phase-4-ci` (and everything based on either) forked at points
+      that predate these commits — the fixes exist on `phase-3-implement`
+      and `phase-4-ci`'s own tips, but this chain (`phase-4-ci` (old
+      point) → 5 → 6 → 7 → 8) branched before either landed, so neither
+      commit is an ancestor of this branch, and neither fix was ever
+      folded forward. Folded in both:
+  - [x] Phase 3's Neo4j timeout fix (`9d9375e` on `phase-3-implement`) —
+        `scripts/graph_tool.py` here had no timeout at all on its
+        `session.run()` calls. Nothing else had touched that file since
+        (confirmed via `git log --all -- scripts/graph_tool.py`), so
+        `git cherry-pick 9d9375e` applied with no conflicts
+  - [x] Phase 4's CI-seed edge-case fix (`2af8057` on `phase-4-ci`) —
+        real design work, not a copy-paste, since `c8d8737` (already in
+        this branch's history) rewrote `generate_ci_graph_seed.py`'s
+        shared-patient/combined-constraint handling after `2af8057` was
+        written. Adapted `_EDGE_CASE_PERSON_ID`/`_EDGE_CASE_TASK_ID`/
+        `_EDGE_CASE_DRUG_NAME` to inject directly into the rewritten
+        script's `patient_lab_values` (post-resolution, bypassing the
+        constraint-satisfaction machinery entirely, since that machinery
+        only ever computes *satisfying* values), regenerated
+        `data/eval/ci_graph_seed.cypher`, and ported
+        `tests/test_graph_tool_integration.py` forward — its skip-guard
+        needed a real redesign, not just new numbers: q7 now verifies 25
+        real patients (up from 1), and at that scale the original
+        "does `count_drugs()` with one real ID return `patients_checked
+        == 1`" skip check turned out to be foolable by the very bug it
+        was meant to help catch (an AND-regressed-to-OR bug, due to
+        Cypher operator precedence, also detaches `person_id IN
+        $person_ids` from the term it's AND'd with, letting the query
+        match real patients outside the requested ID list — invisible
+        with 1 real match, but with 25 it inflated the skip-check's own
+        baseline and produced a false skip instead of a failure).
+        Replaced it with a raw-driver existence check for the edge-case
+        node that never touches `graph_tool.py`'s verify query, so it
+        can't be fooled by a bug in that query
+  - [x] Verified against an isolated ephemeral Neo4j container (not the
+        real Block 3 graph): full test suite (23/23) and `run_eval.py`
+        in fixture mode (11/11) both pass. Proved the new integration
+        test actually catches the regression it exists for: flipped the
+        verify query's `AND` to `OR`, confirmed only that one test fails
+        (22 passed, 1 failed — first attempt, before the skip-guard
+        redesign above, wrongly skipped instead; after the redesign, it
+        correctly failed), reverted, confirmed clean (23/23) again
+- [x] Confirmed CI green on the actual push
+- [x] Commit, push
