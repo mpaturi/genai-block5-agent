@@ -212,6 +212,7 @@ def run_agent(
                 graph_result=drug_counts,
                 confidence=confidence,
                 caveat=caveat,
+                outcome="answered",
             ).model_dump(),
             "answer_error": None,
             "outcome": "answered",
@@ -239,6 +240,7 @@ def run_agent(
                     "No patients were found for this question, so the drug "
                     "count step was skipped."
                 ),
+                outcome="nothing_found",
             ).model_dump(),
             "outcome": "nothing_found",
         }
@@ -255,6 +257,7 @@ def run_agent(
                 graph_result={},
                 confidence="low",
                 caveat="The patient search service failed after repeated attempts.",
+                outcome="tool_error",
             ).model_dump(),
             "outcome": "tool_error",
         }
@@ -275,6 +278,7 @@ def run_agent(
                     "answer is based on search results only, without an exact "
                     "count."
                 ),
+                outcome="tool_error",
             ).model_dump(),
             "outcome": "tool_error",
         }
@@ -295,6 +299,7 @@ def run_agent(
                     "The patient list and drug counts above are accurate; only "
                     "the summary sentence is missing."
                 ),
+                outcome="tool_error",
             ).model_dump(),
             "outcome": "tool_error",
         }

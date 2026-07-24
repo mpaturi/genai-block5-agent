@@ -83,6 +83,7 @@ def test_nothing_found_short_circuits_to_fixed_fallback_answer():
     assert answer.caveat == (
         "No patients were found for this question, so the drug count step was skipped."
     )
+    assert answer.outcome == "nothing_found"
 
 
 def test_search_step_broken_after_retries_returns_fixed_error_answer():
@@ -103,6 +104,7 @@ def test_search_step_broken_after_retries_returns_fixed_error_answer():
     assert answer.graph_result == {}
     assert answer.confidence == "low"
     assert answer.caveat == "The patient search service failed after repeated attempts."
+    assert answer.outcome == "tool_error"
 
 
 def test_graph_step_broken_after_retries_returns_degraded_answer():
@@ -134,6 +136,7 @@ def test_graph_step_broken_after_retries_returns_degraded_answer():
         "The drug count step failed after repeated attempts. This answer is "
         "based on search results only, without an exact count."
     )
+    assert answer.outcome == "tool_error"
 
 
 def test_answer_step_failed_after_one_retry_returns_fixed_answer():
@@ -176,3 +179,4 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
         "patient list and drug counts above are accurate; only the summary "
         "sentence is missing."
     )
+    assert answer.outcome == "tool_error"

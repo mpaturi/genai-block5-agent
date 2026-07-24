@@ -317,6 +317,7 @@ Every run returns one answer object with these fields:
 | `graph_result` | the exact count result from the graph step |
 | `confidence` | `high`, `medium`, or `low` |
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
+| `outcome` | `answered`, `nothing_found`, or `tool_error` — see the outcome table below |
 
 The final answer object has no separate field for "how many patients
 were checked" (see Tool 2) — it is never shown on its own. It only ever
@@ -336,7 +337,24 @@ code, from the patient-count rule below — it's a fixed, number-based
 decision, not something that benefits from the model's judgment, so it's
 never left up to it. `caveat` works the same way as `confidence`: it's
 always fixed template text, chosen by code, based on which step failed or
-how many patients were checked — never freely written either.
+how many patients were checked — never freely written either. `outcome`
+is the same again: always one of three fixed, code-chosen values, never
+freely written.
+
+`outcome` exists so a caller (a future Block 6 orchestrator, for example)
+can tell a genuine tool failure apart from a legitimate low-confidence
+success without having to parse `caveat`'s free text to guess which
+happened. `tool_error` means a step actually broke — search, the graph
+count, or the answer write-up — after exhausting its retries.
+`nothing_found` means every step that ran worked correctly and correctly
+found no matching patients — not a failure, a true negative.
+`nothing_found` and a `low`-confidence `tool_error` can look similar at a
+glance (both fixed wording, both `confidence: "low"`), but they mean
+different things: one says "the system worked and there's nothing here,"
+the other says "the system didn't work." `answered` means step 4 actually
+ran and produced a real, freely-written sentence — `confidence` can still
+be `low` or `medium` on this path (see the rule below), so `answered`
+does not imply `high`; it only means nothing broke.
 
 The only field genuinely written by the language model is `answer`, and
 only on the one path where both tools succeeded (step 4 actually runs) —
@@ -348,6 +366,11 @@ wording instead — see the outcome table below. On every other path
 and `answer` is also fixed text from the outcome table.
 
 Rules for filling these in:
+- `outcome` is `answered` only on full success (step 4 ran and produced a
+  real sentence); `nothing_found` only when search ran successfully and
+  found no matches; `tool_error` on every other path — search, graph, or
+  the answer-writing step itself failing after exhausting retries (see
+  the outcome table below for the exact mapping).
 - `confidence` is `low` whenever the graph step didn't run, the graph step
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
@@ -405,13 +428,13 @@ only case with real numbers to describe, and those numbers are different
 every time. Every other outcome always uses the same fixed wording, so
 tests can check against it exactly:
 
-| Outcome | `answer` | `rag_patient_ids` / `graph_result` | `caveat` |
-|---|---|---|---|
-| Nothing found | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | both empty | "No patients were found for this question, so the drug count step was skipped." |
-| Search step broken | "I wasn't able to answer this question because the patient search step could not be completed." | both empty | "The patient search service failed after repeated attempts." |
-| Graph step broken | "Search found matching patients, but the exact drug count could not be completed." | patient list filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
-| Answer step failed | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | both filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
-| Full success | a new sentence written by the agent, naming the counts and citing patient IDs | both filled in | none, unless the confidence rule above calls for one |
+| Outcome | `outcome` | `answer` | `rag_patient_ids` / `graph_result` | `caveat` |
+|---|---|---|---|---|
+| Nothing found | `nothing_found` | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | both empty | "No patients were found for this question, so the drug count step was skipped." |
+| Search step broken | `tool_error` | "I wasn't able to answer this question because the patient search step could not be completed." | both empty | "The patient search service failed after repeated attempts." |
+| Graph step broken | `tool_error` | "Search found matching patients, but the exact drug count could not be completed." | patient list filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
+| Answer step failed | `tool_error` | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | both filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
+| Full success | `answered` | a new sentence written by the agent, naming the counts and citing patient IDs | both filled in | none, unless the confidence rule above calls for one |
 
 `confidence` is `low` for the first four rows and `high` or `medium` only
 for the last row, based on the rule above.

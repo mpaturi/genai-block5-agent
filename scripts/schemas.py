@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 Comparison = Literal["above", "below"]
 Confidence = Literal["high", "medium", "low"]
+Outcome = Literal["answered", "nothing_found", "tool_error"]
 
 _COMPARISON_SYMBOLS: dict[Comparison, str] = {"above": ">", "below": "<"}
 
@@ -146,6 +147,7 @@ class ClinicalAnswer(BaseModel):
     graph_result: dict
     confidence: Confidence
     caveat: Optional[str] = None
+    outcome: Outcome
 
 
 class AgentState(TypedDict):
