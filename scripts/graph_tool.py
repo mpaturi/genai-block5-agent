@@ -17,7 +17,7 @@ being tested.
 import os
 
 from dotenv import load_dotenv
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, Query
 
 load_dotenv()
 
@@ -25,6 +25,15 @@ NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD")
 NEO4J_DATABASE = os.environ.get("NEO4J_DATABASE", "neo4j")
+
+# Matches rag_tool.py's timeout=10 on its HTTP call (see docs/spec.md's
+# "Agent steps" - both tools use a fixed 10-second timeout). session.run()
+# has no timeout kwarg of its own - passing timeout=10 straight to run()
+# would silently become an unused Cypher parameter, not an actual limit.
+# The only way to bound a query's execution time in this driver is to wrap
+# the query text in a Query object carrying a server-side transaction
+# timeout, which is what GRAPH_QUERY_TIMEOUT is used for below.
+GRAPH_QUERY_TIMEOUT = 10
 
 _LAB_PROPERTY = {
     "SBP": "latest_sbp",
@@ -117,7 +126,7 @@ def count_drugs(
                 lab_property=lab_property, op=op
             )
             verify_row = session.run(
-                verify_query,
+                Query(verify_query, timeout=GRAPH_QUERY_TIMEOUT),
                 condition=condition,
                 person_ids=person_ids,
                 value=value,
@@ -127,7 +136,10 @@ def count_drugs(
             if not verified_ids:
                 return {"drug_counts": {}, "patients_checked": 0}
 
-            count_rows = session.run(DRUG_COUNT_QUERY, person_ids=verified_ids)
+            count_rows = session.run(
+                Query(DRUG_COUNT_QUERY, timeout=GRAPH_QUERY_TIMEOUT),
+                person_ids=verified_ids,
+            )
             drug_counts = {row["drug"]: row["patient_count"] for row in count_rows}
     except Exception as exc:
         raise GraphServiceError(type(exc).__name__)
