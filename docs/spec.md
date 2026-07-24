@@ -314,6 +314,7 @@ Every run returns one answer object with these fields:
 | `question` | the original question |
 | `answer` | a plain-English answer combining both tool results |
 | `rag_patient_ids` | the patient IDs the semantic search step found |
+| `rag_citations` | per-patient chunk-level evidence backing `rag_patient_ids` — see below |
 | `graph_result` | the exact count result from the graph step |
 | `confidence` | `high`, `medium`, or `low` |
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
@@ -330,8 +331,8 @@ pass — so `rag_patient_ids` can be longer than the number that actually
 determines `confidence`.
 
 Not all fields come from the same place. `question`, `rag_patient_ids`,
-and `graph_result` are always filled in directly by the agent's own code,
-copied straight from what steps 1–3 already found — the language model
+`rag_citations`, and `graph_result` are always filled in directly by the
+agent's own code, copied straight from what steps 1–3 already found — the language model
 never generates these. `confidence` is also always computed directly by
 code, from the patient-count rule below — it's a fixed, number-based
 decision, not something that benefits from the model's judgment, so it's
@@ -356,6 +357,19 @@ ran and produced a real, freely-written sentence — `confidence` can still
 be `low` or `medium` on this path (see the rule below), so `answered`
 does not imply `high`; it only means nothing broke.
 
+`rag_citations` is the semantic search step's own chunk-level evidence,
+not the graph step's. It holds one entry per patient in
+`rag_patient_ids` — same patient set, same best-score-first order, built
+from the exact same dedupe pass via `build_rag_citations()` in
+`scripts/schemas.py` — each entry naming that patient's winning chunk's
+ID and the chunk text itself (`patient_id`, `chunk_id`, `snippet`). It
+sits next to `rag_patient_ids`, never inside `graph_result`:
+`graph_result` is Neo4j's drug-count output only, and mixing RAG chunk
+text into it would blur "what Tool 1 retrieved" with "what Tool 2
+counted." Like `rag_patient_ids`, it's empty exactly when search found
+nothing or failed, and filled in on every path where `rag_patient_ids`
+is.
+
 The only field genuinely written by the language model is `answer`, and
 only on the one path where both tools succeeded (step 4 actually runs) —
 there, it tries to write one plain-English sentence describing the
@@ -371,6 +385,8 @@ Rules for filling these in:
   found no matches; `tool_error` on every other path — search, graph, or
   the answer-writing step itself failing after exhausting retries (see
   the outcome table below for the exact mapping).
+- `rag_citations` follows `rag_patient_ids` exactly on every path — empty
+  wherever `rag_patient_ids` is empty, filled in wherever it's filled in.
 - `confidence` is `low` whenever the graph step didn't run, the graph step
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
@@ -428,13 +444,13 @@ only case with real numbers to describe, and those numbers are different
 every time. Every other outcome always uses the same fixed wording, so
 tests can check against it exactly:
 
-| Outcome | `outcome` | `answer` | `rag_patient_ids` / `graph_result` | `caveat` |
+| Outcome | `outcome` | `answer` | `rag_patient_ids` / `rag_citations` / `graph_result` | `caveat` |
 |---|---|---|---|---|
-| Nothing found | `nothing_found` | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | both empty | "No patients were found for this question, so the drug count step was skipped." |
-| Search step broken | `tool_error` | "I wasn't able to answer this question because the patient search step could not be completed." | both empty | "The patient search service failed after repeated attempts." |
-| Graph step broken | `tool_error` | "Search found matching patients, but the exact drug count could not be completed." | patient list filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
-| Answer step failed | `tool_error` | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | both filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
-| Full success | `answered` | a new sentence written by the agent, naming the counts and citing patient IDs | both filled in | none, unless the confidence rule above calls for one |
+| Nothing found | `nothing_found` | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | all empty | "No patients were found for this question, so the drug count step was skipped." |
+| Search step broken | `tool_error` | "I wasn't able to answer this question because the patient search step could not be completed." | all empty | "The patient search service failed after repeated attempts." |
+| Graph step broken | `tool_error` | "Search found matching patients, but the exact drug count could not be completed." | patient list and citations filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
+| Answer step failed | `tool_error` | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | all filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
+| Full success | `answered` | a new sentence written by the agent, naming the counts and citing patient IDs | all filled in | none, unless the confidence rule above calls for one |
 
 `confidence` is `low` for the first four rows and `high` or `medium` only
 for the last row, based on the rule above.

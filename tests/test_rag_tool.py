@@ -23,13 +23,13 @@ def test_search_patients_returns_deduped_ordered_ids_on_a_hit(monkeypatch):
     body = {
         "answer": "Two patients match.",
         "sources": [
-            {"person_id": 5, "chunk_id": "5_chunk0", "score": 0.5},
-            {"person_id": 2, "chunk_id": "2_chunk0", "score": 0.9},
+            {"person_id": 5, "chunk_id": "5_chunk0", "score": 0.5, "chunk_text": "Patient 5, chunk 0 text."},
+            {"person_id": 2, "chunk_id": "2_chunk0", "score": 0.9, "chunk_text": "Patient 2, chunk 0 text."},
             # A repeat of patient 5 with a higher score - dedupe should
             # keep the higher score, not the first-seen one.
-            {"person_id": 5, "chunk_id": "5_chunk1", "score": 0.7},
+            {"person_id": 5, "chunk_id": "5_chunk1", "score": 0.7, "chunk_text": "Patient 5, chunk 1 text."},
             # Same score as patient 2 - tie broken by patient ID.
-            {"person_id": 1, "chunk_id": "1_chunk0", "score": 0.9},
+            {"person_id": 1, "chunk_id": "1_chunk0", "score": 0.9, "chunk_text": "Patient 1, chunk 0 text."},
         ],
         "retrieved_count": 3,
     }
@@ -54,6 +54,13 @@ def test_search_patients_returns_deduped_ordered_ids_on_a_hit(monkeypatch):
     assert result["retrieved_count"] == 3
     # Score descending; patient 1 and 2 tie at 0.9, so ID breaks the tie.
     assert result["patient_ids"] == [1, 2, 5]
+    # Same dedupe/order as patient_ids, but carrying each winning chunk's
+    # ID and text under the patient_id name, not Block 4's person_id.
+    assert result["citations"] == [
+        {"patient_id": 1, "chunk_id": "1_chunk0", "snippet": "Patient 1, chunk 0 text."},
+        {"patient_id": 2, "chunk_id": "2_chunk0", "snippet": "Patient 2, chunk 0 text."},
+        {"patient_id": 5, "chunk_id": "5_chunk1", "snippet": "Patient 5, chunk 1 text."},
+    ]
 
     # condition/lab/comparison/value must be sent as structured metadata
     # filter fields alongside the free-text query and top_k, not dropped.
@@ -85,6 +92,7 @@ def test_search_patients_handles_a_miss_as_success_not_an_error(monkeypatch):
 
     assert result["retrieved_count"] == 0
     assert result["patient_ids"] == []
+    assert result["citations"] == []
 
 
 def test_search_patients_raises_on_upstream_502(monkeypatch):

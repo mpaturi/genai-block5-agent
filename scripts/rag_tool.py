@@ -13,7 +13,7 @@ import os
 import requests
 from dotenv import load_dotenv
 
-from scripts.schemas import dedupe_and_order_patient_ids
+from scripts.schemas import build_rag_citations, dedupe_and_order_patient_ids
 
 load_dotenv()
 
@@ -67,6 +67,7 @@ def search_patients(
         return {
             "answer": body["answer"],
             "patient_ids": dedupe_and_order_patient_ids(body["sources"]),
+            "citations": build_rag_citations(body["sources"]),
             "retrieved_count": body["retrieved_count"],
         }
 
