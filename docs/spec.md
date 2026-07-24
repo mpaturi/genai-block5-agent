@@ -375,7 +375,15 @@ Rules for filling these in:
   result can still be built on a small slice of patients who really
   exist, when the true population is much larger than the 20-patient
   ceiling. That is the correct, honest behavior of this tier, not a bug:
-  it reports how much was verified, never how much exists — and this
+  it reports how much was verified, never how much exists. Put another
+  way, `high` can only ever be produced when RAG's retrieval saturated
+  its entire `top_k=20` budget — there is no path to `patients_checked
+  == 20` except every one of Tool 1's maximum possible candidates coming
+  back and verifying. So `high` doesn't merely allow for an incomplete
+  view of the true population; whenever the true population exceeds 20,
+  it guarantees one, since retrieval would have kept surfacing matches
+  past 20 if it were allowed to. Read `high` as "we maxed out what this
+  tool is capable of checking," never as "we found everyone." And this
   branch's recalibration keeps that true at the new `top_k=20` setting
   the same way the original thresholds kept it true at `top_k=5`.
 - `caveat` is filled in on every `low` or `medium` result, explaining why
