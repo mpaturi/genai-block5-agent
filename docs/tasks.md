@@ -208,3 +208,32 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       match (up from 4 of 8), the two large-population questions improve
       but stay structurally capped by the ceiling
 - [x] Commit, push the follow-up
+- [x] CI failed on the follow-up commit (`4d7028a`) — the "Run evaluation"
+      step scored 0.636 (7/11), below the 0.70 gate.
+      `data/eval/ci_graph_seed.cypher` was left byte-identical even though
+      `answer_key.json`/`rag_fixtures.json` both changed, so the CI
+      service's seeded graph still only had the old, smaller
+      per-question verified-patient sets baked in. Re-ran
+      `scripts/generate_ci_graph_seed.py`; verified against an isolated
+      ephemeral Neo4j container (not the real Block 3 graph, matching
+      CI's `neo4j:5.18-community` service) — full test suite (21/21) and
+      `run_eval.py` in fixture mode both pass, score back to 1.000
+      (11/11). Commit, push
+- [ ] **Known gap, tracked, not silently dropped:** the hand-written
+      edge-case regression patient from Phase 4 (`_EDGE_CASE_PERSON_ID =
+      900001` / `ZZZ_Test_Excluded_Drug`, commit `2af8057` on
+      `phase-4-ci`, exercised by `tests/test_graph_tool_integration.py`)
+      is absent from the regenerated seed above — not because
+      regeneration dropped it, but because it was never inherited here.
+      Phase 5, Phase 6, and this branch all forked from a point on
+      `phase-4-ci` that predates `2af8057` (`git merge-base
+      --is-ancestor 2af8057 HEAD` is false), and `c8d8737` — already in
+      this branch's own history, done independently — rewrote
+      `generate_ci_graph_seed.py`'s shared-patient handling in the
+      meantime (patients can now verify for more than one task, with
+      combined lab constraints), a design the original edge-case code
+      never accounted for. Porting `_EDGE_CASE_PERSON_ID`/
+      `_EDGE_CASE_TASK_ID`/`_EDGE_CASE_DRUG_NAME` forward needs real
+      design work against that shared-patient/combined-constraint logic,
+      not a mechanical re-application of the old diff — do this as its
+      own follow-up, not bundled into a CI fix
