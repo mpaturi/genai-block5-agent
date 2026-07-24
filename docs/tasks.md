@@ -254,14 +254,15 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       output section
 - [x] **This branch chain never merged to `main`, so before it does:
       confirmed, via `git merge-base --is-ancestor`, not assumed, that
-      two fixes built and reviewed on sibling branches were never
-      actually inherited here.** Both `phase-5-rag-filter-wiring` and
+      three fixes built and reviewed on sibling branches were never
+      actually inherited here.** `phase-5-rag-filter-wiring` and
       `phase-4-ci` (and everything based on either) forked at points
-      that predate these commits — the fixes exist on `phase-3-implement`
-      and `phase-4-ci`'s own tips, but this chain (`phase-4-ci` (old
-      point) → 5 → 6 → 7 → 8) branched before either landed, so neither
-      commit is an ancestor of this branch, and neither fix was ever
-      folded forward. Folded in both:
+      that predate these commits — the fixes exist on `phase-3-implement`,
+      `phase-4-ci`, and `phase-5-rag-filter-wiring`'s own tips, but this
+      chain (`phase-4-ci` (old point) → 5 (old point) → 6 → 7 → 8)
+      branched before any of the three landed, so none of the three
+      commits is an ancestor of this branch, and none of the three fixes
+      was ever folded forward. Folded in all three:
   - [x] Phase 3's Neo4j timeout fix (`9d9375e` on `phase-3-implement`) —
         `scripts/graph_tool.py` here had no timeout at all on its
         `session.run()` calls. Nothing else had touched that file since
@@ -300,4 +301,32 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
         redesign above, wrongly skipped instead; after the redesign, it
         correctly failed), reverted, confirmed clean (23/23) again
 - [x] Confirmed CI green on the actual push
+- [x] Commit, push
+- [x] Third instance of the same root cause, found after the fact —
+      Phase 5's 422-handling fix (`4e409a0` on `phase-5-rag-filter-wiring`,
+      "treat a 422 from Block 4 as a non-retryable bad filter") was also
+      missing. `phase-6-confidence-recalibration` branched from
+      `c8d8737`, one commit before `4e409a0` landed on `phase-5`, so this
+      whole chain (6 → 7 → 8) never inherited it either. `git cherry-pick
+      -n 4e409a0` applied via auto-merge (`tests/test_rag_tool.py` had
+      since diverged — the `invalid_top_k` boundary test moved from
+      `top_k=21` to `26`), no conflicts, no leftover conflict markers,
+      resulting diff matches the original commit exactly
+  - [x] Restored `test_search_patients_raises_on_invalid_filter_422` in
+        `tests/test_rag_tool.py` — confirmed it was also missing (not
+        assumed) before restoring it
+- [x] **Systematic check, not just the three found by chance:** ran
+      `git merge-base --is-ancestor` for every one of the 36 unique
+      commits across `phase-3-implement`, `phase-4-ci`, and
+      `phase-5-rag-filter-wiring` against this branch's tip. Exactly
+      three came back not-an-ancestor — `9d9375e`, `2af8057`, and
+      `4e409a0`, the three already found and folded in above (their
+      cherry-picked content is here under new commit hashes, which is
+      why the *original* SHAs still correctly report as non-ancestors —
+      cherry-picking necessarily creates new commits). No fourth
+      instance found
+- [x] Full suite (23/23, 1 skip against the real Block 3 graph — expected,
+      it doesn't have the synthetic CI fixture) and `run_eval.py` (11/11)
+      both green after folding in the third fix
+- [x] Confirmed CI green on this push too
 - [x] Commit, push
