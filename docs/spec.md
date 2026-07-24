@@ -666,6 +666,30 @@ Not part of this block:
   is an accepted, unavoidable cost of building on top of Block 4 as-is,
   not something this block attempts to fix.
 
+## What I'd do next
+
+Tool 1's `top_k` ceiling (see Tool 1, Important honesty point) is a real,
+structural limit on recall for large-population questions, and raising it
+again would only narrow that gap, never close it. But for a specific
+subset of questions, the ceiling doesn't need to exist at all: whenever a
+question is fully answerable from structured filters alone — `condition`,
+`lab`, `comparison`, `value`, with no free-text semantic component
+actually needed to identify the right patients — the graph database
+already stores condition and lab data as exact properties (see Tool 2).
+It could enumerate every matching patient directly with one query,
+returning the true, complete population, rather than routing through
+Tool 1's RAG search and its inherently bounded `top_k` at all.
+
+This is a deliberate, planned architectural improvement, not an
+oversight or something this block failed to do — it's scoped out of
+Block 5 on purpose (see Scope) and planned instead for Block 6 or Block
+8, once agent orchestration/integration work spanning multiple tools is
+already underway and a change like this fits naturally alongside it.
+Block 5's current behavior — bounded `top_k`, paired with an honest
+`caveat` whenever that bound matters (see Structured output) — is
+correct and sufficient for what this block is actually responsible for;
+it is not a gap this block should attempt to fix on its own.
+
 ## Success criteria
 
 This block is complete when:
