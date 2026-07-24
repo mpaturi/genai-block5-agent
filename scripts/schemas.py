@@ -113,21 +113,26 @@ def dedupe_and_order_patient_ids(sources: list[dict]) -> list[int]:
 def compute_confidence(patients_checked: int) -> Confidence:
     """The one shared confidence rule (see docs/spec.md's Structured output).
 
-    Fewer than 12 patients checked is `low`, 12 to 19 is `medium`, 20 (Tool
-    1's top_k=20 ceiling - the most Tool 2 can ever be handed) is `high`.
-    These are the original thresholds (low <3, medium 3-4, high >=5) scaled
-    by the same 4x factor Tool 1's default top_k grew by (5 -> 20), so
-    `high` keeps its original meaning - reachable at the tool's actual
-    operating ceiling, not trivially easy, and not practically unreachable
-    (see docs/spec.md's Structured output section for the real, measured
-    per-question counts these boundaries are grounded in). Both agent.py
-    (the real run) and build_eval_answer_key.py (the golden answer key)
-    call this, so an off-by-one on the tier boundaries can never silently
-    diverge between the two.
+    Fewer than 15 patients checked is `low`, 15 to 24 is `medium`, 25 (Tool
+    1's top_k=25 ceiling - the most Tool 2 can ever be handed) is `high`.
+    Same design principle as the original thresholds - `high` reachable
+    only at the tool's actual operating ceiling, not trivially easy, and
+    not practically unreachable - re-grounded in Phase 7's real,
+    remeasured per-question counts (not guessed): sorted, they are 1, 3,
+    3, 8, 18, 19, 25, 25, and 15 is the boundary that reproduces the same
+    four `low` / two `medium` / two `high` split the original thresholds
+    were grounded in (see docs/spec.md's Structured output section for
+    the full numbers). 15 also happens to be 60% of the new 25 ceiling,
+    the same fraction (12 of 20) the original `low` boundary sat at - not
+    the reason it was chosen, but a useful confirmation it isn't an
+    arbitrary cut. Both agent.py (the real run) and
+    build_eval_answer_key.py (the golden answer key) call this, so an
+    off-by-one on the tier boundaries can never silently diverge between
+    the two.
     """
-    if patients_checked < 12:
+    if patients_checked < 15:
         return "low"
-    if patients_checked < 20:
+    if patients_checked < 25:
         return "medium"
     return "high"
 

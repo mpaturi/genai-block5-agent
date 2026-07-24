@@ -180,14 +180,31 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       (`top_k=21` → `26`) and `tests/test_agent_answers.py`'s fakes/
       assertions referencing the old ceiling — all 21 tests pass
 - [x] Commit, push (code/test changes only)
-- [ ] Once the local RAG service is confirmed running the new ceiling:
-      live-verify `top_k=25`, recapture `data/eval/rag_fixtures.json`,
-      regenerate `data/eval/answer_key.json`
-- [ ] Remeasure real recall directly against the graph at the new
-      ceiling and rewrite `docs/spec.md`'s Important honesty point and
-      confidence-tier sections with the real numbers — not guessed
-- [ ] Recalibrate `compute_confidence()`'s `high` threshold in
-      `scripts/schemas.py` (currently hardcoded to `patients_checked >=
-      20`, reasoned explicitly around the old ceiling) for the new
-      `top_k=25` ceiling, grounded in the remeasured per-question counts
-- [ ] Commit, push the follow-up
+- [x] Local RAG service confirmed running `phase-9-external-call-timeouts`
+      (Block 4's branch with the top_k=25 filtered ceiling) — live-verified
+      `top_k=25` succeeds (25 sources returned) and `top_k=26` is still
+      rejected (`"top_k must be between 1 and 25"`)
+- [x] Recapture `data/eval/rag_fixtures.json` via
+      `scripts/capture_rag_fixtures.py` and regenerate
+      `data/eval/answer_key.json` via `scripts/build_eval_answer_key.py`
+      against the live, `top_k=25`-capable service
+- [x] Recalibrate `compute_confidence()`'s tiers in `scripts/schemas.py`
+      (`low` < 15, `medium` 15–24, `high` >= 25), grounded in the real
+      per-question verified-patient counts the regenerated answer key
+      produced — 1, 3, 3, 8, 18, 19, 25, 25 — not guessed; re-ran
+      `build_eval_answer_key.py` again afterward so the golden answers'
+      `confidence` field reflects the new thresholds
+- [x] Re-ran `scripts/run_eval.py` (fixture mode, matching CI) — 11/11,
+      updated `docs/eval_results.md`
+- [x] Measured true per-question population directly against the graph
+      (not RAG/agent) for all 8 answerable questions, independent of and
+      cross-checked against the previous phase's numbers (populations
+      unchanged — only what's found changed); spot-checked one by hand
+      (Congestive heart failure / SBP < 110: 18 of 333 total, matching the
+      script's count exactly)
+- [x] Rewrote `docs/spec.md`'s Important honesty point and confidence-tier
+      sections with the real, remeasured recall numbers (mean 0.789, up
+      from 0.761 at `top_k=20`) — 6 of 8 questions now find every real
+      match (up from 4 of 8), the two large-population questions improve
+      but stay structurally capped by the ceiling
+- [x] Commit, push the follow-up

@@ -107,43 +107,49 @@ patient — it only returns a handful of likely matches. So the graph's
 count is exact, but only over the patients RAG happened to find, not
 every matching patient in the system. This gap is real, but it is now
 substantially smaller than it was: wiring in Block 4's Phase 7 metadata
-filter and raising Tool 1's default `top_k` to 20 (see Tool 1 above)
+filter and raising Tool 1's default `top_k`, first to 20 and then, once
+Block 4 raised its filtered-only ceiling, to 25 (see Tool 1 above)
 measurably improved it, re-measured directly against the graph's true
 patient counts (not estimated, and not borrowed from Block 4's own,
 separate eval set), across the same 8 answerable questions as before.
 
-**The real, current number: mean recall is 0.761**, up from 0.000 at the
-old `top_k=5`, unfiltered setting, and 0.059 at Block 4's old `top_k=20`
-unfiltered ceiling. Every one of the 8 questions now finds at least one
-real match — zero of them find nothing, down from 5 of 8 before. Per
-question, the true population size in the graph versus what search
-actually finds (and Tool 2 verifies):
+**The real, current number: mean recall is 0.789**, up from 0.000 at the
+old `top_k=5`, unfiltered setting, 0.059 at Block 4's old `top_k=20`
+unfiltered ceiling, and 0.761 at the filtered `top_k=20` setting. Every
+one of the 8 questions now finds at least one real match — zero of them
+find nothing, down from 5 of 8 before filtering went in. Per question,
+the true population size in the graph versus what search actually finds
+(and Tool 2 verifies):
 
 | Question (condition / lab) | True matching patients | Found & verified | Recall |
 |---|---|---|---|
-| Essential hypertension / SBP > 140 | 99 | 20 | 0.202 |
+| Essential hypertension / SBP > 140 | 99 | 25 | 0.253 |
 | Osteoporosis / BMI < 22 | 3 | 3 | 1.000 |
 | Pulmonary embolism / SBP < 100 | 8 | 8 | 1.000 |
 | Atrial fibrillation / SBP > 150 | 1 | 1 | 1.000 |
 | Hyperlipidemia / HbA1c > 7 | 3 | 3 | 1.000 |
-| Congestive heart failure / SBP < 110 | 18 | 16 | 0.889 |
-| Streptococcal pharyngitis / BMI < 25 | 397 | 20 | 0.050 |
-| Anemia / Glucose > 150 | 19 | 18 | 0.947 |
+| Congestive heart failure / SBP < 110 | 18 | 18 | 1.000 |
+| Streptococcal pharyngitis / BMI < 25 | 397 | 25 | 0.063 |
+| Anemia / Glucose > 150 | 19 | 19 | 1.000 |
 
-Honestly, the improvement is real but uneven, not a uniform fix. Four of
-the eight questions now find every real match (recall 1.000), and two
-more find nearly all of them (0.889, 0.947). But the two questions with
-the largest true populations — Essential hypertension (99 patients) and
-Streptococcal pharyngitis (397 patients) — are still capped hard by Tool
-1's `top_k=20` ceiling itself, not by filter or semantic quality: across
-all 8 questions, every single patient the filter returns genuinely passes
-Tool 2's verification (zero false positives measured) — it simply cannot
-return more than 20 of them no matter how many really exist. For those
-two, recall stays low (0.202, 0.050) for a structural reason that raising
-`top_k` cannot fix, because it's already at Block 4's hard ceiling: the
-API hard-rejects any `top_k` above 20 (HTTP 422, confirmed by a live
-call), so 20 is a real limit, not a setting this project simply chose not
-to raise.
+Honestly, the improvement is real but uneven, not a uniform fix. Six of
+the eight questions now find every real match (recall 1.000) — up from
+four at the old `top_k=20` ceiling, since raising it to 25 was enough to
+close the last small gaps for Congestive heart failure (16 of 18 before,
+18 of 18 now) and Anemia (18 of 19 before, 19 of 19 now). But the two
+questions with the largest true populations — Essential hypertension (99
+patients) and Streptococcal pharyngitis (397 patients) — are still capped
+hard by Tool 1's `top_k=25` ceiling itself, not by filter or semantic
+quality: across all 8 questions, every single patient the filter returns
+genuinely passes Tool 2's verification (zero false positives measured) —
+it simply cannot return more than 25 of them no matter how many really
+exist. For those two, recall improved (0.253 up from 0.202, 0.063 up from
+0.050) but stays low, for a structural reason that raising `top_k` again
+could narrow further but not eliminate: the gap between 25 and a true
+population in the hundreds is still enormous, and Block 4's ceiling is a
+real limit each time, not a setting this project simply chose not to
+raise (confirmed live: a call at `top_k=26` is hard-rejected with HTTP
+422, `"top_k must be between 1 and 25"`).
 
 This was also spot-checked by hand for confidence, not just trusted from
 the measurement script: confirmed directly against the graph that exactly
@@ -184,7 +190,7 @@ nothing matched.
 
 | | |
 |---|---|
-| Input | a question, and how many results to return (1–20, default 20) |
+| Input | a question, and how many results to return (1–25, default 25) |
 | Output (match) | a short prose answer, a list of matching patients, how many were found |
 | Output (no match) | an explicit "nothing found" result — not an error |
 | Output (failure) | a clear error, distinguishing "service down" from "bad input" |
@@ -346,46 +352,46 @@ Rules for filling these in:
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
   patients were actually verified (see Tool 2 — the number who passed the
-  condition/lab check, not the raw number RAG returned): fewer than 12
-  verified patients is `low`, 12 to 19 is `medium`, and 20 — the maximum
-  Tool 1's `top_k=20` can ever hand Tool 2 (see Tool 1) — is `high`.
-  These are the original thresholds (fewer than 3 was `low`, 3 or 4 was
-  `medium`, 5 or more was `high`) scaled by the same 4x factor Tool 1's
-  default `top_k` grew by (5 -> 20), so `high` keeps the meaning it
-  always had: reachable at the tool's actual operating ceiling, not
-  trivially easy, and not practically unreachable. Left unscaled, "5 or
-  more" would now only mean a quarter of the new ceiling, not "at or
-  near" it — quietly making `high` far easier to reach than originally
-  intended, for no reason connected to the agent actually being more
-  trustworthy.
+  condition/lab check, not the raw number RAG returned): fewer than 15
+  verified patients is `low`, 15 to 24 is `medium`, and 25 — the maximum
+  Tool 1's `top_k=25` can ever hand Tool 2 (see Tool 1) — is `high`.
 
   These boundaries are grounded in the real per-question verified-patient
-  counts Block 5's own 8 answerable questions actually produced (see
-  Important honesty point above) — 1, 3, 3, 8, 16, 18, 20, 20 — not
-  guessed: they split that real distribution into four `low` (1, 3, 3,
-  8), two `medium` (16, 18), and two `high` (20, 20).
+  counts Block 5's own 8 answerable questions actually produced once
+  Block 4 raised its filtered-only ceiling to 25 (see Important honesty
+  point above) — 1, 3, 3, 8, 18, 19, 25, 25 — not guessed: they split
+  that real distribution into the same shape as the original thresholds
+  did, four `low` (1, 3, 3, 8), two `medium` (18, 19), and two `high`
+  (25, 25). 15 is also 60% of the new 25 ceiling, the same fraction (12
+  of 20) the prior `low` boundary sat at — not the reason it was chosen
+  (the real gap between 8 and 18 is what mattered), but a useful
+  confirmation it isn't an arbitrary cut. `high` keeps the meaning it has
+  always had at every ceiling this project has used (5, then 20, now
+  25): reachable at the tool's actual operating ceiling, not trivially
+  easy, and not practically unreachable.
 - **What this tier does and doesn't mean:** it reflects how large the
   *verified* sample was — not how complete that sample is against the
-  true population. A `high` result now means "Tool 1's entire 20-patient
+  true population. A `high` result now means "Tool 1's entire 25-patient
   budget came back verified — every one of them a real, confirmed match,
   and the count among them is exact." It does not mean "this is most, or
   even much, of the true matching population": Block 5's own measured
-  recall (see Important honesty point above — mean 0.761, but as low as
-  0.050 for the largest true populations) shows a `high`-confidence
+  recall (see Important honesty point above — mean 0.789, but as low as
+  0.063 for the largest true populations) shows a `high`-confidence
   result can still be built on a small slice of patients who really
-  exist, when the true population is much larger than the 20-patient
+  exist, when the true population is much larger than the 25-patient
   ceiling. That is the correct, honest behavior of this tier, not a bug:
   it reports how much was verified, never how much exists. Put another
   way, `high` can only ever be produced when RAG's retrieval saturated
-  its entire `top_k=20` budget — there is no path to `patients_checked
-  == 20` except every one of Tool 1's maximum possible candidates coming
+  its entire `top_k=25` budget — there is no path to `patients_checked
+  == 25` except every one of Tool 1's maximum possible candidates coming
   back and verifying. So `high` doesn't merely allow for an incomplete
-  view of the true population; whenever the true population exceeds 20,
+  view of the true population; whenever the true population exceeds 25,
   it guarantees one, since retrieval would have kept surfacing matches
-  past 20 if it were allowed to. Read `high` as "we maxed out what this
-  tool is capable of checking," never as "we found everyone." And this
-  branch's recalibration keeps that true at the new `top_k=20` setting
-  the same way the original thresholds kept it true at `top_k=5`.
+  past 25 if it were allowed to. Read `high` as "we maxed out what this
+  tool is capable of checking," never as "we found everyone." This
+  branch's recalibration keeps that true at the new `top_k=25` setting
+  the same way earlier recalibrations kept it true at `top_k=20` and
+  `top_k=5` before that.
 - `caveat` is filled in on every `low` or `medium` result, explaining why
   — either which step failed, or that the patient group checked was small.
 - The object is always valid — there is no path through the agent that
