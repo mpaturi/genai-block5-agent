@@ -1,8 +1,8 @@
 # Block 5 Tasks
 
-Four phases, each on its own branch, each with its own pull request.
-Every phase branches from the tip of the previous phase's branch (or from
-`main`, if the previous phase's PR has already merged by then).
+Each phase gets its own branch and its own pull request. Every phase
+branches from the tip of the previous phase's branch (or from `main`, if
+the previous phase's PR has already merged by then).
 
 ## Phase 1 — Spec, Plan, Tasks (`phase-1-spec`, base: `main`)
 
@@ -157,3 +157,37 @@ looks like.
       TODO markers — stating plainly that the improvement is real but
       uneven, not a uniform fix
 - [x] Commit, push
+
+## Phase 7 — Filtered top_k ceiling (`phase-7-filtered-top-k-ceiling`, base: `phase-6-confidence-recalibration`)
+
+Block 5's `search_patients()` always sends a `condition`/`lab`/
+`comparison`/`value` filter, so every call already qualifies for Block
+4's raised filtered-only `top_k` ceiling of 25 (up from 20).
+
+- [x] Confirm the live RAG service's actual ceiling before trusting it —
+      a live call at `top_k=25` against the locally running service was
+      still rejected (`"top_k must be between 1 and 20"`), the same
+      stale-service problem Phase 5 hit. Deferred every item below that
+      needs live, filter-aware `top_k=25` data until the service is
+      confirmed updated
+- [x] Update `scripts/rag_tool.py`'s `search_patients()` default and
+      pre-flight validation range from `1–20` to `1–25`
+- [x] Update the call site in `scripts/agent.py`, both eval-fixture
+      generators (`scripts/build_eval_answer_key.py`,
+      `scripts/capture_rag_fixtures.py`), and `scripts/run_eval.py`'s
+      fixture-replay stub signature
+- [x] Update `tests/test_rag_tool.py`'s `invalid_top_k` boundary test
+      (`top_k=21` → `26`) and `tests/test_agent_answers.py`'s fakes/
+      assertions referencing the old ceiling — all 21 tests pass
+- [x] Commit, push (code/test changes only)
+- [ ] Once the local RAG service is confirmed running the new ceiling:
+      live-verify `top_k=25`, recapture `data/eval/rag_fixtures.json`,
+      regenerate `data/eval/answer_key.json`
+- [ ] Remeasure real recall directly against the graph at the new
+      ceiling and rewrite `docs/spec.md`'s Important honesty point and
+      confidence-tier sections with the real numbers — not guessed
+- [ ] Recalibrate `compute_confidence()`'s `high` threshold in
+      `scripts/schemas.py` (currently hardcoded to `patients_checked >=
+      20`, reasoned explicitly around the old ceiling) for the new
+      `top_k=25` ceiling, grounded in the remeasured per-question counts
+- [ ] Commit, push the follow-up
