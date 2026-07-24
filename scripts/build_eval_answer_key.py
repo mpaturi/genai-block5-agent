@@ -83,7 +83,7 @@ def _search(question: QuestionInput) -> list[int]:
         f"{RAG_API_URL}/query",
         json={
             "question": query_text,
-            "top_k": 20,
+            "top_k": 25,
             "condition": question.condition,
             "lab": question.lab,
             "comparison": question.comparison,

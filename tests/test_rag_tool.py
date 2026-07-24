@@ -163,7 +163,7 @@ def test_search_patients_rejects_bad_top_k_before_any_http_call(monkeypatch):
             "SBP",
             "above",
             140,
-            top_k=21,
+            top_k=26,
         )
         assert False, "expected RAGServiceError"
     except RAGServiceError as exc:

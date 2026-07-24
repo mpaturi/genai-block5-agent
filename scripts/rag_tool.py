@@ -41,9 +41,9 @@ def search_patients(
     lab: str,
     comparison: str,
     value: float,
-    top_k: int = 20,
+    top_k: int = 25,
 ) -> dict:
-    if not (1 <= top_k <= 20):
+    if not (1 <= top_k <= 25):
         raise RAGServiceError("invalid_top_k", retryable=False)
 
     try:

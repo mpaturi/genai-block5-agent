@@ -120,7 +120,7 @@ def run_agent(
                 question_input.lab,
                 question_input.comparison,
                 question_input.value,
-                top_k=20,
+                top_k=25,
             )
             return {"rag_result": result, "rag_error": None}
         except RAGServiceError as exc:

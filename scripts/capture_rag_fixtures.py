@@ -37,7 +37,7 @@ def main() -> None:
             question.lab,
             question.comparison,
             question.value,
-            top_k=20,
+            top_k=25,
         )
 
     FIXTURES_PATH.write_text(json.dumps(fixtures, indent=2) + "\n", encoding="utf-8")
