@@ -390,7 +390,7 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       Phase 8
 - [x] Full suite green — 24 passed, 1 skipped (the pre-existing live-graph
       integration test, unaffected by this change)
-- [ ] Commit, push
+- [x] Commit (not pushed yet)
 - [x] **Known gap, tracked, not silently dropped:** `data/eval/
       rag_fixtures.json` was NOT regenerated this phase — Block 4's
       `phase-10-chunk-text-citations` (the source of `chunk_text`) isn't
