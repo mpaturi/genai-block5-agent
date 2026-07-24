@@ -403,4 +403,13 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       regeneration in Phase 7. CI on this branch is expected to fail on
       the "Run evaluation" step until then; this is a known, deliberate
       gap, not a bug
+- [x] **Gap resolved:** Block 4's `phase-10-chunk-text-citations` landed,
+      so re-ran `scripts/capture_rag_fixtures.py` against the live search
+      service — `data/eval/rag_fixtures.json` now carries real
+      `chunk_text`-derived `"citations"` per fixture.
+      `build_eval_answer_key.py`'s output untouched (it never used
+      `chunk_text`). Verified: full `pytest` suite (24 passed, 1
+      pre-existing skip) and `scripts/run_eval.py` in fixture mode
+      (11/11, `docs/eval_results.md` byte-identical — citations don't
+      affect any of the three scored dimensions) both green. Commit, push
 - [x] Commit, push
