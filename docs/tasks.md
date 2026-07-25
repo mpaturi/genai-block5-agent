@@ -330,3 +330,86 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       both green after folding in the third fix
 - [x] Confirmed CI green on this push too
 - [x] Commit, push
+
+## Phase 9 — RAG citations (`phase-9-rag-citations`, base: `phase-8-expose-outcome`)
+
+- [x] `scripts/schemas.py`: refactor `dedupe_and_order_patient_ids()`'s
+      internals into a shared private `_dedupe_best_sources(sources) ->
+      dict[int, dict]` (patient_id → its full winning source dict, not
+      just the score) plus a small `_order_patient_ids_best_score_first()`
+      ordering helper — one dedupe/sort pass, not two, per this file's own
+      "logic lives in exactly one place" rule.
+      `dedupe_and_order_patient_ids()` calls the helpers and returns just
+      the ID list, byte-identical to today — no behavior change, so
+      nothing that already imports it (including
+      `build_eval_answer_key.py`) breaks
+- [x] Add `build_rag_citations(sources) -> list[dict]`, built on the same
+      helpers and the same best-score-first order, returning
+      `[{"patient_id": ..., "chunk_id": ..., "snippet": ...}, ...]` —
+      `chunk_text` from Block 4's source becomes `snippet`, `person_id`
+      becomes `patient_id` (the external name `rag_patient_ids` already
+      uses, not Block 4's internal naming)
+- [x] Add `rag_citations: list[dict]` to `ClinicalAnswer`, next to
+      `rag_patient_ids` — not inside `graph_result`, which is Neo4j drug
+      counts only. Add `rag_citations: list[dict]` to `AgentState` too
+- [x] `scripts/rag_tool.py`: `search_patients()`'s 200 branch returns
+      `"citations": build_rag_citations(body["sources"])` alongside
+      `"patient_ids"` and `"retrieved_count"`
+- [x] `scripts/agent.py`: `initial_state` defaults `rag_citations` to
+      `[]`, mirroring `rag_patient_ids`. `count_node`'s two branches both
+      add `"rag_citations": state["rag_result"]["citations"]`. Every
+      `ClinicalAnswer(...)` site gets `rag_citations` following
+      `rag_patient_ids`'s exact same pass/fail pairing —
+      `state["rag_citations"]` where `rag_patient_ids` is populated
+      (`synthesize_node`, `build_graph_error_answer_node`,
+      `build_answer_error_answer_node`), `[]` where `rag_patient_ids=[]`
+      is used (`build_fallback_answer_node`,
+      `build_search_error_answer_node`). No new logic branches
+- [x] Confirmed `scripts/build_eval_answer_key.py` needs no changes — it
+      only ever imports `dedupe_and_order_patient_ids` for the golden
+      patient list, never chunk text
+- [x] Updated `tests/test_rag_tool.py`'s existing hit-test fixture with
+      `chunk_text` per source and asserted `result["citations"]`
+      (best-score-first, deduped, same as `patient_ids`)
+- [x] Updated every fake `search_fn` in `tests/test_agent_answers.py` to
+      include a `"citations"` key (`count_node` now `KeyError`s without
+      it). Added a `rag_citations` assertion to the no-patients-found
+      test (empty) and to the graph-broken / answer-step-failed tests
+      (populated, matching `rag_patient_ids`). Added one new test for the
+      full-success path — the one deliberate exception to this file's
+      "every path except full success" scope (see Phase 8's note on the
+      same docstring claim), added specifically to confirm
+      `rag_citations` threads through `ClinicalAnswer` the way
+      `rag_patient_ids` already does
+- [x] Documented `rag_citations` in `docs/spec.md`'s Structured output
+      section — the field table, the "always filled in directly" list,
+      a paragraph on what it is and why it's separate from `graph_result`,
+      a "follows `rag_patient_ids` exactly" rule bullet, and the
+      exact-wording outcome table's `rag_patient_ids` / `rag_citations` /
+      `graph_result` column — matching how `outcome` was documented on
+      Phase 8
+- [x] Full suite green — 24 passed, 1 skipped (the pre-existing live-graph
+      integration test, unaffected by this change)
+- [x] Commit (not pushed yet)
+- [x] **Known gap, tracked, not silently dropped:** `data/eval/
+      rag_fixtures.json` was NOT regenerated this phase — Block 4's
+      `phase-10-chunk-text-citations` (the source of `chunk_text`) isn't
+      available to call yet. The cached fixtures predate this change and
+      have no `"citations"` key at all, so `scripts/run_eval.py` with
+      `USE_RAG_FIXTURES` set (matching CI) will `KeyError` on
+      `state["rag_result"]["citations"]` in `count_node` until
+      `scripts/capture_rag_fixtures.py` is re-run once Block 4's phase
+      lands — the same category of follow-up as the `top_k=25` fixture
+      regeneration in Phase 7. CI on this branch is expected to fail on
+      the "Run evaluation" step until then; this is a known, deliberate
+      gap, not a bug
+- [x] **Gap resolved:** Block 4's `phase-10-chunk-text-citations` landed,
+      so re-ran `scripts/capture_rag_fixtures.py` against the live search
+      service — `data/eval/rag_fixtures.json` now carries real
+      `chunk_text`-derived `"citations"` per fixture.
+      `build_eval_answer_key.py`'s output untouched (it never used
+      `chunk_text`). Verified: full `pytest` suite (24 passed, 1
+      pre-existing skip) and `scripts/run_eval.py` in fixture mode
+      (11/11, `docs/eval_results.md` byte-identical — citations don't
+      affect any of the three scored dimensions) both green. Commit, push
+- [x] Commit, push
