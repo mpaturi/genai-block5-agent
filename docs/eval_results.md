@@ -1,6 +1,6 @@
 # Eval Results
 
-This file is produced by `scripts/run_eval.py`, run against the real agent (real search service, real graph, real language model) per `docs/spec.md`'s Evaluation section.
+This file is produced by `scripts/run_eval.py`, run against the real graph, recorded RAG fixtures, not the real search service, and a stub answer-writing function, not the real language model, per `docs/spec.md`'s Evaluation section.
 
 **Task success rate: 1.000 (11/11)** — CI gate threshold is 0.70 (see `docs/spec.md`'s CI gate).
 

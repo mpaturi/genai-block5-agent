@@ -105,32 +105,65 @@ comparison to the graph's exact count.
 **Important honesty point:** the RAG service does not find every matching
 patient — it only returns a handful of likely matches. So the graph's
 count is exact, but only over the patients RAG happened to find, not
-every matching patient in the system. This is not a hypothetical
-gap — measured directly against the graph's true patient counts (not
-estimated, and not borrowed from Block 4's own, separate eval set) at the
-agent's actual setting (`top_k=5`), real recall across Block 5's own 8
-answerable questions is **0.000**. Concretely: "Essential hypertension,
-SBP > 140" has 99 real matching patients in the graph, and search returns
-zero of them.
+every matching patient in the system. This gap is real, but it is now
+substantially smaller than it was: wiring in Block 4's Phase 7 metadata
+filter and raising Tool 1's default `top_k`, first to 20 and then, once
+Block 4 raised its filtered-only ceiling, to 25 (see Tool 1 above)
+measurably improved it, re-measured directly against the graph's true
+patient counts (not estimated, and not borrowed from Block 4's own,
+separate eval set), across the same 8 answerable questions as before.
 
-Raising `top_k` was investigated as a possible mitigation, and ruled out
-with evidence rather than assumed: Block 4's API hard-rejects any `top_k`
-above 20 (HTTP 422, confirmed by a live call), so 20 is a real ceiling,
-not a setting this project simply chose not to raise. Even at that
-ceiling, mean recall only reaches 0.059, with 5 of the 8 questions still
-finding zero real matches at any setting tested.
+**The real, current number: mean recall is 0.789**, up from 0.000 at the
+old `top_k=5`, unfiltered setting, 0.059 at Block 4's old `top_k=20`
+unfiltered ceiling, and 0.761 at the filtered `top_k=20` setting. Every
+one of the 8 questions now finds at least one real match — zero of them
+find nothing, down from 5 of 8 before filtering went in. Per question,
+the true population size in the graph versus what search actually finds
+(and Tool 2 verifies):
+
+| Question (condition / lab) | True matching patients | Found & verified | Recall |
+|---|---|---|---|
+| Essential hypertension / SBP > 140 | 99 | 25 | 0.253 |
+| Osteoporosis / BMI < 22 | 3 | 3 | 1.000 |
+| Pulmonary embolism / SBP < 100 | 8 | 8 | 1.000 |
+| Atrial fibrillation / SBP > 150 | 1 | 1 | 1.000 |
+| Hyperlipidemia / HbA1c > 7 | 3 | 3 | 1.000 |
+| Congestive heart failure / SBP < 110 | 18 | 18 | 1.000 |
+| Streptococcal pharyngitis / BMI < 25 | 397 | 25 | 0.063 |
+| Anemia / Glucose > 150 | 19 | 19 | 1.000 |
+
+Honestly, the improvement is real but uneven, not a uniform fix. Six of
+the eight questions now find every real match (recall 1.000) — up from
+four at the old `top_k=20` ceiling, since raising it to 25 was enough to
+close the last small gaps for Congestive heart failure (16 of 18 before,
+18 of 18 now) and Anemia (18 of 19 before, 19 of 19 now). But the two
+questions with the largest true populations — Essential hypertension (99
+patients) and Streptococcal pharyngitis (397 patients) — are still capped
+hard by Tool 1's `top_k=25` ceiling itself, not by filter or semantic
+quality: across all 8 questions, every single patient the filter returns
+genuinely passes Tool 2's verification (zero false positives measured) —
+it simply cannot return more than 25 of them no matter how many really
+exist. For those two, recall improved (0.253 up from 0.202, 0.063 up from
+0.050) but stays low, for a structural reason that raising `top_k` again
+could narrow further but not eliminate: the gap between 25 and a true
+population in the hundreds is still enormous, and Block 4's ceiling is a
+real limit each time, not a setting this project simply chose not to
+raise (confirmed live: a call at `top_k=26` is hard-rejected with HTTP
+422, `"top_k must be between 1 and 25"`).
 
 This was also spot-checked by hand for confidence, not just trusted from
 the measurement script: confirmed directly against the graph that exactly
-1 of 117 real Atrial fibrillation patients has SBP > 150, matching the
-measured result exactly — so this is a real property of the data, not a
-bug in how it was measured.
+1 of 117 real Atrial fibrillation patients has SBP > 150, and search now
+finds that one patient — matching the measured result exactly, the same
+spot-check fact as before this filter went in.
 
 The Tool 2 verification step (see Tool 2) guarantees the count is
-accurate over whichever few patients are found — but it does not, and
-cannot, fix this. It's a Block 4 retrieval-quality limitation, out of
-Block 5's scope to fix (see Scope). The agent must say so whenever that
-matters (see Structured output, `caveat` field).
+accurate over whichever patients are found — but it does not, and cannot,
+guarantee that's every real match. For large-population questions like
+Essential hypertension and Streptococcal pharyngitis above, that gap is
+still a Block 4 retrieval-ceiling limitation, out of Block 5's scope to
+fix (see Scope). The agent must say so whenever that matters (see
+Structured output, `caveat` field).
 
 **Picking out the two named drugs:** the graph step always returns a
 count for every drug the checked patients are on, not just the two named
@@ -157,7 +190,7 @@ nothing matched.
 
 | | |
 |---|---|
-| Input | a question, and how many results to return (1–20, default 5) |
+| Input | a question, and how many results to return (1–25, default 25) |
 | Output (match) | a short prose answer, a list of matching patients, how many were found |
 | Output (no match) | an explicit "nothing found" result — not an error |
 | Output (failure) | a clear error, distinguishing "service down" from "bad input" |
@@ -175,11 +208,16 @@ follow this rule, and since RAG's matching is semantic, that drift could
 silently change which patients come back — which is exactly the kind of
 mismatch the golden answer key is supposed to catch, not cause.
 
-The agent always calls this tool at its default of 5 results; it never
-overrides that number. This isn't optional: the confidence tiers (see
-Structured output) are calibrated specifically against 5 being the
-normal number of patients found, so a different number here would
-silently throw off what "high confidence" is supposed to mean.
+The agent now calls this tool at its default of 20 results — up from
+5 — every time; it never overrides that number.
+
+Tool 1 also sends the question's `condition`, `lab`, `comparison`, and
+`value` fields to Block 4's API as structured metadata filter fields, not
+just embedded in the free-text query built above. Block 4 uses these to
+narrow results to patients whose own graph-derived metadata actually
+matches — not just patients whose record text is semantically similar —
+per Block 4's Phase 7 filter work (see also Important honesty point
+below).
 
 The agent does not retry inside the tool itself — retries happen at the
 agent level (see Agent steps).
@@ -276,9 +314,11 @@ Every run returns one answer object with these fields:
 | `question` | the original question |
 | `answer` | a plain-English answer combining both tool results |
 | `rag_patient_ids` | the patient IDs the semantic search step found |
+| `rag_citations` | per-patient chunk-level evidence backing `rag_patient_ids` — see below |
 | `graph_result` | the exact count result from the graph step |
 | `confidence` | `high`, `medium`, or `low` |
 | `caveat` | a short note on anything that limits trust in the answer, or nothing if there's no caveat |
+| `outcome` | `answered`, `nothing_found`, or `tool_error` — see the outcome table below |
 
 The final answer object has no separate field for "how many patients
 were checked" (see Tool 2) — it is never shown on its own. It only ever
@@ -291,14 +331,44 @@ pass — so `rag_patient_ids` can be longer than the number that actually
 determines `confidence`.
 
 Not all fields come from the same place. `question`, `rag_patient_ids`,
-and `graph_result` are always filled in directly by the agent's own code,
-copied straight from what steps 1–3 already found — the language model
+`rag_citations`, and `graph_result` are always filled in directly by the
+agent's own code, copied straight from what steps 1–3 already found — the language model
 never generates these. `confidence` is also always computed directly by
 code, from the patient-count rule below — it's a fixed, number-based
 decision, not something that benefits from the model's judgment, so it's
 never left up to it. `caveat` works the same way as `confidence`: it's
 always fixed template text, chosen by code, based on which step failed or
-how many patients were checked — never freely written either.
+how many patients were checked — never freely written either. `outcome`
+is the same again: always one of three fixed, code-chosen values, never
+freely written.
+
+`outcome` exists so a caller (a future Block 6 orchestrator, for example)
+can tell a genuine tool failure apart from a legitimate low-confidence
+success without having to parse `caveat`'s free text to guess which
+happened. `tool_error` means a step actually broke — search, the graph
+count, or the answer write-up — after exhausting its retries.
+`nothing_found` means every step that ran worked correctly and correctly
+found no matching patients — not a failure, a true negative.
+`nothing_found` and a `low`-confidence `tool_error` can look similar at a
+glance (both fixed wording, both `confidence: "low"`), but they mean
+different things: one says "the system worked and there's nothing here,"
+the other says "the system didn't work." `answered` means step 4 actually
+ran and produced a real, freely-written sentence — `confidence` can still
+be `low` or `medium` on this path (see the rule below), so `answered`
+does not imply `high`; it only means nothing broke.
+
+`rag_citations` is the semantic search step's own chunk-level evidence,
+not the graph step's. It holds one entry per patient in
+`rag_patient_ids` — same patient set, same best-score-first order, built
+from the exact same dedupe pass via `build_rag_citations()` in
+`scripts/schemas.py` — each entry naming that patient's winning chunk's
+ID and the chunk text itself (`patient_id`, `chunk_id`, `snippet`). It
+sits next to `rag_patient_ids`, never inside `graph_result`:
+`graph_result` is Neo4j's drug-count output only, and mixing RAG chunk
+text into it would blur "what Tool 1 retrieved" with "what Tool 2
+counted." Like `rag_patient_ids`, it's empty exactly when search found
+nothing or failed, and filled in on every path where `rag_patient_ids`
+is.
 
 The only field genuinely written by the language model is `answer`, and
 only on the one path where both tools succeeded (step 4 actually runs) —
@@ -310,32 +380,57 @@ wording instead — see the outcome table below. On every other path
 and `answer` is also fixed text from the outcome table.
 
 Rules for filling these in:
+- `outcome` is `answered` only on full success (step 4 ran and produced a
+  real sentence); `nothing_found` only when search ran successfully and
+  found no matches; `tool_error` on every other path — search, graph, or
+  the answer-writing step itself failing after exhausting retries (see
+  the outcome table below for the exact mapping).
+- `rag_citations` follows `rag_patient_ids` exactly on every path — empty
+  wherever `rag_patient_ids` is empty, filled in wherever it's filled in.
 - `confidence` is `low` whenever the graph step didn't run, the graph step
   failed, or the answer-writing step itself failed.
 - When the graph step succeeded, `confidence` depends on how many
   patients were actually verified (see Tool 2 — the number who passed the
-  condition/lab check, not the raw number RAG returned): fewer than 3
-  verified patients is `low` (too small a group to trust), 3 or 4 is
-  `medium`, and 5 or more is `high`. These thresholds are unchanged from
-  before the Tool 2 verification fix and are still deliberately set
-  against the search tool's default of 5 results per question (see Tool
-  1) — a boundary like "10 or more" would make `high` confidence
-  unreachable at the default setting, which defeats the point of having
-  the tier at all. They now simply attach to a stronger, verified claim
-  instead of a raw, unverified one.
+  condition/lab check, not the raw number RAG returned): fewer than 15
+  verified patients is `low`, 15 to 24 is `medium`, and 25 — the maximum
+  Tool 1's `top_k=25` can ever hand Tool 2 (see Tool 1) — is `high`.
+
+  These boundaries are grounded in the real per-question verified-patient
+  counts Block 5's own 8 answerable questions actually produced once
+  Block 4 raised its filtered-only ceiling to 25 (see Important honesty
+  point above) — 1, 3, 3, 8, 18, 19, 25, 25 — not guessed: they split
+  that real distribution into the same shape as the original thresholds
+  did, four `low` (1, 3, 3, 8), two `medium` (18, 19), and two `high`
+  (25, 25). 15 is also 60% of the new 25 ceiling, the same fraction (12
+  of 20) the prior `low` boundary sat at — not the reason it was chosen
+  (the real gap between 8 and 18 is what mattered), but a useful
+  confirmation it isn't an arbitrary cut. `high` keeps the meaning it has
+  always had at every ceiling this project has used (5, then 20, now
+  25): reachable at the tool's actual operating ceiling, not trivially
+  easy, and not practically unreachable.
 - **What this tier does and doesn't mean:** it reflects how large the
   *verified* sample was — not how complete that sample is against the
-  true population. A `high` result means "5 or more patients were
-  confirmed to genuinely match, and the count among them is exact." It
-  does not mean "this is most, or even much, of the true matching
-  population." Given the real recall numbers measured directly against
-  the graph (see "Important honesty point" above — 0.000 at the agent's
-  actual `top_k=5` setting, and only 0.059 even at Block 4's hard
-  `top_k=20` ceiling), real runs will rarely reach `high` confidence
-  anymore. That is the correct, honest behavior of this tier, not a bug:
-  a small verified sample is exactly what a low-recall retrieval step
-  should produce, and this tier is supposed to say so plainly rather than
-  paper over it.
+  true population. A `high` result now means "Tool 1's entire 25-patient
+  budget came back verified — every one of them a real, confirmed match,
+  and the count among them is exact." It does not mean "this is most, or
+  even much, of the true matching population": Block 5's own measured
+  recall (see Important honesty point above — mean 0.789, but as low as
+  0.063 for the largest true populations) shows a `high`-confidence
+  result can still be built on a small slice of patients who really
+  exist, when the true population is much larger than the 25-patient
+  ceiling. That is the correct, honest behavior of this tier, not a bug:
+  it reports how much was verified, never how much exists. Put another
+  way, `high` can only ever be produced when RAG's retrieval saturated
+  its entire `top_k=25` budget — there is no path to `patients_checked
+  == 25` except every one of Tool 1's maximum possible candidates coming
+  back and verifying. So `high` doesn't merely allow for an incomplete
+  view of the true population; whenever the true population exceeds 25,
+  it guarantees one, since retrieval would have kept surfacing matches
+  past 25 if it were allowed to. Read `high` as "we maxed out what this
+  tool is capable of checking," never as "we found everyone." This
+  branch's recalibration keeps that true at the new `top_k=25` setting
+  the same way earlier recalibrations kept it true at `top_k=20` and
+  `top_k=5` before that.
 - `caveat` is filled in on every `low` or `medium` result, explaining why
   — either which step failed, or that the patient group checked was small.
 - The object is always valid — there is no path through the agent that
@@ -349,13 +444,13 @@ only case with real numbers to describe, and those numbers are different
 every time. Every other outcome always uses the same fixed wording, so
 tests can check against it exactly:
 
-| Outcome | `answer` | `rag_patient_ids` / `graph_result` | `caveat` |
-|---|---|---|---|
-| Nothing found | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | both empty | "No patients were found for this question, so the drug count step was skipped." |
-| Search step broken | "I wasn't able to answer this question because the patient search step could not be completed." | both empty | "The patient search service failed after repeated attempts." |
-| Graph step broken | "Search found matching patients, but the exact drug count could not be completed." | patient list filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
-| Answer step failed | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | both filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
-| Full success | a new sentence written by the agent, naming the counts and citing patient IDs | both filled in | none, unless the confidence rule above calls for one |
+| Outcome | `outcome` | `answer` | `rag_patient_ids` / `rag_citations` / `graph_result` | `caveat` |
+|---|---|---|---|---|
+| Nothing found | `nothing_found` | "I don't know — I couldn't find any patient records relevant to that question." (the same message the search service itself already uses) | all empty | "No patients were found for this question, so the drug count step was skipped." |
+| Search step broken | `tool_error` | "I wasn't able to answer this question because the patient search step could not be completed." | all empty | "The patient search service failed after repeated attempts." |
+| Graph step broken | `tool_error` | "Search found matching patients, but the exact drug count could not be completed." | patient list and citations filled in from the search step, graph result empty | "The drug count step failed after repeated attempts. This answer is based on search results only, without an exact count." |
+| Answer step failed | `tool_error` | "I found matching patients and counted their drugs, but wasn't able to put together a valid written answer." | all filled in — the underlying data is fine, only the write-up failed | "The final write-up step failed, even after retrying once. The patient list and drug counts above are accurate; only the summary sentence is missing." |
+| Full success | `answered` | a new sentence written by the agent, naming the counts and citing patient IDs | all filled in | none, unless the confidence rule above calls for one |
 
 `confidence` is `low` for the first four rows and `high` or `medium` only
 for the last row, based on the rule above.
@@ -609,6 +704,30 @@ Not part of this block:
   this agent only has access to its already-deployed HTTP API — so this
   is an accepted, unavoidable cost of building on top of Block 4 as-is,
   not something this block attempts to fix.
+
+## What I'd do next
+
+Tool 1's `top_k` ceiling (see Tool 1, Important honesty point) is a real,
+structural limit on recall for large-population questions, and raising it
+again would only narrow that gap, never close it. But for a specific
+subset of questions, the ceiling doesn't need to exist at all: whenever a
+question is fully answerable from structured filters alone — `condition`,
+`lab`, `comparison`, `value`, with no free-text semantic component
+actually needed to identify the right patients — the graph database
+already stores condition and lab data as exact properties (see Tool 2).
+It could enumerate every matching patient directly with one query,
+returning the true, complete population, rather than routing through
+Tool 1's RAG search and its inherently bounded `top_k` at all.
+
+This is a deliberate, planned architectural improvement, not an
+oversight or something this block failed to do — it's scoped out of
+Block 5 on purpose (see Scope) and planned instead for Block 6 or Block
+8, once agent orchestration/integration work spanning multiple tools is
+already underway and a change like this fits naturally alongside it.
+Block 5's current behavior — bounded `top_k`, paired with an honest
+`caveat` whenever that bound matters (see Structured output) — is
+correct and sufficient for what this block is actually responsible for;
+it is not a gap this block should attempt to fix on its own.
 
 ## Success criteria
 

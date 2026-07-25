@@ -1,84 +1,200 @@
 {
   "q1": {
     "rag_patient_ids": [
-      140
+      7253,
+      8737,
+      6700,
+      4191,
+      11015,
+      7459,
+      8139,
+      11504,
+      3134,
+      18,
+      5599,
+      2132,
+      6883,
+      11258,
+      7371,
+      11171,
+      2677,
+      3691,
+      5915,
+      2003,
+      11459,
+      7685,
+      10279,
+      2268,
+      8695
     ],
-    "graph_result": {},
-    "patients_checked": 0,
-    "confidence": "low"
+    "graph_result": {
+      "Amlodipine": 8,
+      "Lisinopril": 10,
+      "Hydrochlorothiazide": 11
+    },
+    "patients_checked": 25,
+    "confidence": "high"
   },
   "q2": {
     "rag_patient_ids": [
-      2216
+      10328,
+      2116,
+      1563
     ],
-    "graph_result": {},
-    "patients_checked": 0,
+    "graph_result": {
+      "Alendronic acid": 2,
+      "Ciprofloxacin": 1,
+      "Hydrochlorothiazide": 1,
+      "Lisinopril": 1,
+      "Amlodipine": 1,
+      "Insulin": 1
+    },
+    "patients_checked": 3,
     "confidence": "low"
   },
   "q3": {
     "rag_patient_ids": [
-      10390
+      3805,
+      933,
+      7281,
+      10605,
+      6593,
+      3776,
+      2480,
+      7795
     ],
-    "graph_result": {},
-    "patients_checked": 0,
+    "graph_result": {
+      "Enoxaparin": 5
+    },
+    "patients_checked": 8,
     "confidence": "low"
   },
   "q4": {
     "rag_patient_ids": [
-      150,
-      149,
-      1501
+      4361
     ],
-    "graph_result": {},
-    "patients_checked": 0,
+    "graph_result": {
+      "Digoxin": 1,
+      "Warfarin": 1
+    },
+    "patients_checked": 1,
     "confidence": "low"
   },
   "q5": {
     "rag_patient_ids": [
-      2807,
-      4072,
-      5076,
-      7937,
-      5091
+      6211,
+      4738,
+      6597
     ],
-    "graph_result": {},
-    "patients_checked": 0,
+    "graph_result": {
+      "Simvastatin": 2,
+      "Hydrochlorothiazide": 1,
+      "Amlodipine": 1
+    },
+    "patients_checked": 3,
     "confidence": "low"
   },
   "q6": {
     "rag_patient_ids": [
-      1106,
-      11083,
-      1100,
-      11454,
-      4283
+      3033,
+      113,
+      3180,
+      727,
+      9336,
+      4547,
+      3188,
+      10760,
+      6593,
+      8747,
+      1551,
+      4561,
+      10469,
+      1156,
+      9629,
+      8777,
+      2429,
+      1786
     ],
-    "graph_result": {},
-    "patients_checked": 0,
-    "confidence": "low"
+    "graph_result": {
+      "Amlodipine": 4,
+      "Hydrochlorothiazide": 4,
+      "Metformin": 3,
+      "Lisinopril": 4,
+      "Carvedilol": 5,
+      "Alendronic acid": 4,
+      "Simvastatin": 2,
+      "Enoxaparin": 1,
+      "Insulin": 1
+    },
+    "patients_checked": 18,
+    "confidence": "medium"
   },
   "q7": {
     "rag_patient_ids": [
-      8715,
-      9159,
-      5263,
       11146,
-      2130
+      7201,
+      11465,
+      248,
+      301,
+      5195,
+      9563,
+      4956,
+      5014,
+      4664,
+      2340,
+      5460,
+      3730,
+      2339,
+      785,
+      2804,
+      381,
+      4025,
+      726,
+      4708,
+      2574,
+      272,
+      3764,
+      2764,
+      5032
     ],
     "graph_result": {},
-    "patients_checked": 1,
-    "confidence": "low"
+    "patients_checked": 25,
+    "confidence": "high"
   },
   "q8": {
     "rag_patient_ids": [
-      1501,
-      149,
-      1508,
-      1504,
-      1450
+      6452,
+      9675,
+      3405,
+      9119,
+      9691,
+      7811,
+      438,
+      7532,
+      5222,
+      891,
+      8314,
+      1763,
+      4378,
+      3024,
+      2222,
+      798,
+      1702,
+      11557,
+      6707
     ],
-    "graph_result": {},
-    "patients_checked": 0,
-    "confidence": "low"
+    "graph_result": {
+      "Hydrochlorothiazide": 7,
+      "Metformin": 16,
+      "Simvastatin": 1,
+      "Lisinopril": 5,
+      "Digoxin": 1,
+      "Warfarin": 1,
+      "Alendronic acid": 2,
+      "Amlodipine": 6,
+      "Insulin": 3
+    },
+    "patients_checked": 19,
+    "confidence": "medium"
   }
 }

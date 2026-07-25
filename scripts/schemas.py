@@ -1,11 +1,11 @@
 """Shared types for Block 5: the structured question input, the agent's
 internal state, and the final structured answer (see docs/spec.md).
 
-Also holds build_rag_query(), dedupe_and_order_patient_ids(), and
-compute_confidence() - the pieces of logic docs/spec.md requires to live in
-exactly one place so rag_tool.py, graph_tool.py, agent.py, and
-build_eval_answer_key.py can never drift apart by each writing their own
-copy.
+Also holds build_rag_query(), dedupe_and_order_patient_ids(),
+build_rag_citations(), and compute_confidence() - the pieces of logic
+docs/spec.md requires to live in exactly one place so rag_tool.py,
+graph_tool.py, agent.py, and build_eval_answer_key.py can never drift
+apart by each writing their own copy.
 """
 from typing import Literal, Optional, TypedDict
 
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 Comparison = Literal["above", "below"]
 Confidence = Literal["high", "medium", "low"]
+Outcome = Literal["answered", "nothing_found", "tool_error"]
 
 _COMPARISON_SYMBOLS: dict[Comparison, str] = {"above": ">", "below": "<"}
 
@@ -72,6 +73,50 @@ def assemble_question_text(question: QuestionInput) -> str:
     )
 
 
+def _dedupe_best_sources(sources: list[dict]) -> dict[int, dict]:
+    """The one shared dedupe rule (see docs/spec.md's Tool 1): for each
+    patient_id, keep the full source dict with the highest score seen,
+    throwing away any duplicate, lower-scoring entries for that patient.
+
+    Keeps the full winning source dict, not just its score, so callers
+    that need more than the score - build_rag_citations()'s chunk_id and
+    chunk_text, for example - read it straight from here instead of a
+    second, separately written dedupe pass. This is the one place this
+    logic lives; dedupe_and_order_patient_ids() and build_rag_citations()
+    both build on it, so their patient sets can never silently diverge.
+    """
+    best_source: dict[int, dict] = {}
+    for source in sources:
+        person_id = source["person_id"]
+        score = source["score"]
+        if person_id not in best_source or score > best_source[person_id]["score"]:
+            best_source[person_id] = source
+    return best_source
+
+
+def _order_patient_ids_best_score_first(best_source: dict[int, dict]) -> list[int]:
+    """Order deduped patient IDs best score first, ties broken by patient
+    ID - the one shared ordering rule dedupe_and_order_patient_ids() and
+    build_rag_citations() both use, so their patient orders can never
+    silently diverge.
+    """
+
+    def get_sort_key_for_patient(patient_id):
+        """Build the value sorted() uses to compare two patients.
+
+        Returns a pair: the patient's score with its sign flipped (so
+        sorting smallest-to-normal actually puts the highest real score
+        first), and the patient ID itself (used only to break a tie
+        between two equal scores).
+        """
+        score = best_source[patient_id]["score"]
+        negative_score = -score
+        return (negative_score, patient_id)
+
+    patient_ids = list(best_source.keys())
+    return sorted(patient_ids, key=get_sort_key_for_patient)
+
+
 def dedupe_and_order_patient_ids(sources: list[dict]) -> list[int]:
     """The one shared patient-ID rule (see docs/spec.md's Tool 1): dedupe by
     person_id (keeping the highest score seen for a repeat), then order by
@@ -82,46 +127,57 @@ def dedupe_and_order_patient_ids(sources: list[dict]) -> list[int]:
     from one implementation of "dedupe and order" can never silently drift
     from what the real tool does at run time.
     """
-    # Step 1: build a notebook of each patient's best (highest) score,
-    # throwing away any duplicate, lower-scoring entries for that patient.
-    best_score: dict[int, float] = {}
-    for source in sources:
-        person_id = source["person_id"]
-        score = source["score"]
-        if person_id not in best_score or score > best_score[person_id]:
-            best_score[person_id] = score
+    best_source = _dedupe_best_sources(sources)
+    return _order_patient_ids_best_score_first(best_source)
 
-    def get_sort_key_for_patient(patient_id):
-        """Build the value sorted() uses to compare two patients.
 
-        Returns a pair: the patient's score with its sign flipped (so
-        sorting smallest-to-normal actually puts the highest real score
-        first), and the patient ID itself (used only to break a tie
-        between two equal scores).
-        """
-        score = best_score[patient_id]
-        negative_score = -score
-        return (negative_score, patient_id)
+def build_rag_citations(sources: list[dict]) -> list[dict]:
+    """Build the per-patient citation list backing ClinicalAnswer's
+    rag_citations field (see docs/spec.md's Structured output): one entry
+    per deduped patient, in the same best-score-first order as
+    dedupe_and_order_patient_ids(), each holding that patient's winning
+    chunk's ID and text.
 
-    # Step 2: sort the deduped patient IDs, best score first, ties broken
-    # by patient ID.
-    patient_ids = list(best_score.keys())
-    sorted_patient_ids = sorted(patient_ids, key=get_sort_key_for_patient)
-    return sorted_patient_ids
+    Uses patient_id - the same external name rag_patient_ids already uses
+    - not Block 4's internal person_id/chunk_text naming, so every field
+    this agent exposes calls a patient and a chunk the same thing
+    everywhere.
+    """
+    best_source = _dedupe_best_sources(sources)
+    ordered_patient_ids = _order_patient_ids_best_score_first(best_source)
+    return [
+        {
+            "patient_id": patient_id,
+            "chunk_id": best_source[patient_id]["chunk_id"],
+            "snippet": best_source[patient_id]["chunk_text"],
+        }
+        for patient_id in ordered_patient_ids
+    ]
 
 
 def compute_confidence(patients_checked: int) -> Confidence:
     """The one shared confidence rule (see docs/spec.md's Structured output).
 
-    Fewer than 3 patients checked is `low`, 3 or 4 is `medium`, 5 or more is
-    `high` - calibrated against Tool 1's default of 5 results per question.
-    Both agent.py (the real run) and build_eval_answer_key.py (the golden
-    answer key) call this, so an off-by-one on the tier boundaries can never
-    silently diverge between the two.
+    Fewer than 15 patients checked is `low`, 15 to 24 is `medium`, 25 (Tool
+    1's top_k=25 ceiling - the most Tool 2 can ever be handed) is `high`.
+    Same design principle as the original thresholds - `high` reachable
+    only at the tool's actual operating ceiling, not trivially easy, and
+    not practically unreachable - re-grounded in Phase 7's real,
+    remeasured per-question counts (not guessed): sorted, they are 1, 3,
+    3, 8, 18, 19, 25, 25, and 15 is the boundary that reproduces the same
+    four `low` / two `medium` / two `high` split the original thresholds
+    were grounded in (see docs/spec.md's Structured output section for
+    the full numbers). 15 also happens to be 60% of the new 25 ceiling,
+    the same fraction (12 of 20) the original `low` boundary sat at - not
+    the reason it was chosen, but a useful confirmation it isn't an
+    arbitrary cut. Both agent.py (the real run) and
+    build_eval_answer_key.py (the golden answer key) call this, so an
+    off-by-one on the tier boundaries can never silently diverge between
+    the two.
     """
-    if patients_checked < 3:
+    if patients_checked < 15:
         return "low"
-    if patients_checked < 5:
+    if patients_checked < 25:
         return "medium"
     return "high"
 
@@ -132,9 +188,11 @@ class ClinicalAnswer(BaseModel):
     question: str
     answer: str
     rag_patient_ids: list[int]
+    rag_citations: list[dict]
     graph_result: dict
     confidence: Confidence
     caveat: Optional[str] = None
+    outcome: Outcome
 
 
 class AgentState(TypedDict):
@@ -143,6 +201,7 @@ class AgentState(TypedDict):
     question: QuestionInput
     rag_result: Optional[dict]
     rag_patient_ids: list[int]
+    rag_citations: list[dict]
     rag_error: Optional[str]
     rag_error_retryable: bool
     rag_retry_count: int

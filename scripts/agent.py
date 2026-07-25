@@ -112,8 +112,16 @@ def run_agent(
 
     def search_node(state: AgentState) -> dict:
         try:
-            query_text = build_rag_query(state["question"])
-            result = search_fn(query_text, top_k=5)
+            question_input = state["question"]
+            query_text = build_rag_query(question_input)
+            result = search_fn(
+                query_text,
+                question_input.condition,
+                question_input.lab,
+                question_input.comparison,
+                question_input.value,
+                top_k=25,
+            )
             return {"rag_result": result, "rag_error": None}
         except RAGServiceError as exc:
             return {
@@ -135,6 +143,7 @@ def run_agent(
         # Order: rag_patient_ids only exists once search succeeded, so this
         # node is only ever reached after a successful search.
         patient_ids = state["rag_result"]["patient_ids"]
+        citations = state["rag_result"]["citations"]
         question_input = state["question"]
         try:
             result = count_fn(
@@ -146,6 +155,7 @@ def run_agent(
             )
             return {
                 "rag_patient_ids": patient_ids,
+                "rag_citations": citations,
                 "graph_result": result,
                 "graph_error": None,
                 "count_step_ran": True,
@@ -153,6 +163,7 @@ def run_agent(
         except GraphServiceError as exc:
             return {
                 "rag_patient_ids": patient_ids,
+                "rag_citations": citations,
                 "graph_error": exc.detail,
                 "graph_error_retryable": exc.retryable,
                 "graph_retry_count": state["graph_retry_count"] + 1,
@@ -201,9 +212,11 @@ def run_agent(
                 question=assemble_question_text(question_input),
                 answer=answer_text,
                 rag_patient_ids=state["rag_patient_ids"],
+                rag_citations=state["rag_citations"],
                 graph_result=drug_counts,
                 confidence=confidence,
                 caveat=caveat,
+                outcome="answered",
             ).model_dump(),
             "answer_error": None,
             "outcome": "answered",
@@ -225,12 +238,14 @@ def run_agent(
                     "to that question."
                 ),
                 rag_patient_ids=[],
+                rag_citations=[],
                 graph_result={},
                 confidence="low",
                 caveat=(
                     "No patients were found for this question, so the drug "
                     "count step was skipped."
                 ),
+                outcome="nothing_found",
             ).model_dump(),
             "outcome": "nothing_found",
         }
@@ -244,9 +259,11 @@ def run_agent(
                     "search step could not be completed."
                 ),
                 rag_patient_ids=[],
+                rag_citations=[],
                 graph_result={},
                 confidence="low",
                 caveat="The patient search service failed after repeated attempts.",
+                outcome="tool_error",
             ).model_dump(),
             "outcome": "tool_error",
         }
@@ -260,6 +277,7 @@ def run_agent(
                     "could not be completed."
                 ),
                 rag_patient_ids=state["rag_patient_ids"],
+                rag_citations=state["rag_citations"],
                 graph_result={},
                 confidence="low",
                 caveat=(
@@ -267,6 +285,7 @@ def run_agent(
                     "answer is based on search results only, without an exact "
                     "count."
                 ),
+                outcome="tool_error",
             ).model_dump(),
             "outcome": "tool_error",
         }
@@ -280,6 +299,7 @@ def run_agent(
                     "wasn't able to put together a valid written answer."
                 ),
                 rag_patient_ids=state["rag_patient_ids"],
+                rag_citations=state["rag_citations"],
                 graph_result=state["graph_result"]["drug_counts"],
                 confidence="low",
                 caveat=(
@@ -287,6 +307,7 @@ def run_agent(
                     "The patient list and drug counts above are accurate; only "
                     "the summary sentence is missing."
                 ),
+                outcome="tool_error",
             ).model_dump(),
             "outcome": "tool_error",
         }
@@ -340,6 +361,7 @@ def run_agent(
         "question": question,
         "rag_result": None,
         "rag_patient_ids": [],
+        "rag_citations": [],
         "rag_error": None,
         "rag_error_retryable": True,
         "rag_retry_count": 0,

@@ -3,6 +3,7 @@ dimensions per question (see docs/spec.md's Evaluation). Writes a score
 report to docs/eval_results.md.
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -11,10 +12,39 @@ from scripts.schemas import QuestionInput
 
 TASKS_PATH = Path("data/eval/tasks.json")
 ANSWER_KEY_PATH = Path("data/eval/answer_key.json")
+FIXTURES_PATH = Path("data/eval/rag_fixtures.json")
 RESULTS_PATH = Path("docs/eval_results.md")
 
 # See docs/spec.md's CI gate.
 THRESHOLD = 0.70
+
+
+def _make_fixture_search_fn():
+    """A search_fn backed by scripts/capture_rag_fixtures.py's recorded
+    responses, for CI - which has no live RAG service to call. Only the
+    search step is faked; count_fn and answer_fn always stay real."""
+    fixtures = json.loads(FIXTURES_PATH.read_text())
+
+    def _search_fn(
+        query_text: str, condition=None, lab=None, comparison=None, value=None, top_k: int = 25
+    ) -> dict:
+        if query_text not in fixtures:
+            raise RuntimeError(
+                f"USE_RAG_FIXTURES is set, but no fixture is recorded for query "
+                f"text {query_text!r}. Re-run scripts/capture_rag_fixtures.py "
+                "if data/eval/tasks.json changed."
+            )
+        return fixtures[query_text]
+
+    return _search_fn
+
+
+def _stub_answer_fn(question, rag_patient_ids, drug_a_count, drug_b_count) -> str:
+    """A stub answer_fn for CI - no real Claude call, no token usage to
+    report. None of the three scored dimensions ever read the free-text
+    answer's content (see docs/spec.md's Known limitations), so the scored
+    evaluation doesn't need a real model call to be scored correctly."""
+    return "Stub answer for CI - not a real model response."
 
 
 def _check_tool_call_correctness(task: dict, count_step_ran: bool) -> bool:
@@ -52,6 +82,12 @@ def run_evaluation() -> dict:
     tasks = json.loads(TASKS_PATH.read_text())
     answer_key = json.loads(ANSWER_KEY_PATH.read_text())
 
+    run_agent_kwargs = {}
+    if os.environ.get("USE_RAG_FIXTURES"):
+        run_agent_kwargs["search_fn"] = _make_fixture_search_fn()
+    if os.environ.get("USE_STUB_ANSWER_FN"):
+        run_agent_kwargs["answer_fn"] = _stub_answer_fn
+
     results = []
     for task in tasks:
         question = QuestionInput(
@@ -62,7 +98,7 @@ def run_evaluation() -> dict:
             drug_a=task["drug_a"],
             drug_b=task["drug_b"],
         )
-        answer, count_step_ran = run_agent(question)
+        answer, count_step_ran = run_agent(question, **run_agent_kwargs)
         golden = answer_key.get(task["id"])
 
         checks = {
@@ -89,13 +125,30 @@ def _mark(ok: bool) -> str:
     return "PASS" if ok else "FAIL"
 
 
+def _describe_run_mode() -> str:
+    """States the truth about what this specific run actually used - never
+    a fixed claim, since search and the answer-writing step can each be
+    stubbed independently (see USE_RAG_FIXTURES/USE_STUB_ANSWER_FN above).
+    The graph is never stubbed, so that part is unconditional."""
+    search_desc = (
+        "recorded RAG fixtures, not the real search service"
+        if os.environ.get("USE_RAG_FIXTURES")
+        else "the real search service"
+    )
+    answer_desc = (
+        "a stub answer-writing function, not the real language model"
+        if os.environ.get("USE_STUB_ANSWER_FN")
+        else "the real language model"
+    )
+    return f"the real graph, {search_desc}, and {answer_desc}"
+
+
 def _write_report(summary: dict) -> None:
     lines = [
         "# Eval Results",
         "",
-        "This file is produced by `scripts/run_eval.py`, run against the real "
-        "agent (real search service, real graph, real language model) per "
-        "`docs/spec.md`'s Evaluation section.",
+        "This file is produced by `scripts/run_eval.py`, run against "
+        f"{_describe_run_mode()}, per `docs/spec.md`'s Evaluation section.",
         "",
         f"**Task success rate: {summary['score']:.3f} "
         f"({summary['passed']}/{summary['total']})** — CI gate threshold is "
