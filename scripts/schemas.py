@@ -144,9 +144,14 @@ class AgentState(TypedDict):
     rag_result: Optional[dict]
     rag_patient_ids: list[int]
     rag_error: Optional[str]
+    rag_error_retryable: bool
     rag_retry_count: int
     graph_result: Optional[dict]
     graph_error: Optional[str]
+    graph_error_retryable: bool
     graph_retry_count: int
+    answer_error: Optional[str]
+    answer_retry_count: int
     final_answer: Optional[dict]
     count_step_ran: bool
+    outcome: Optional[str]

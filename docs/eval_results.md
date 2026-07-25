@@ -1,0 +1,19 @@
+# Eval Results
+
+This file is produced by `scripts/run_eval.py`, run against the real agent (real search service, real graph, real language model) per `docs/spec.md`'s Evaluation section.
+
+**Task success rate: 1.000 (11/11)** — CI gate threshold is 0.70 (see `docs/spec.md`'s CI gate).
+
+| Question | Answerable | Tool-call correctness | Structured output validity | Answer accuracy | Passed |
+|---|---|---|---|---|---|
+| q1 | True | PASS | PASS | PASS | PASS |
+| q2 | True | PASS | PASS | PASS | PASS |
+| q3 | True | PASS | PASS | PASS | PASS |
+| q4 | True | PASS | PASS | PASS | PASS |
+| q5 | True | PASS | PASS | PASS | PASS |
+| q6 | True | PASS | PASS | PASS | PASS |
+| q7 | True | PASS | PASS | PASS | PASS |
+| q8 | True | PASS | PASS | PASS | PASS |
+| q9 | False | PASS | PASS | PASS | PASS |
+| q10 | False | PASS | PASS | PASS | PASS |
+| q11 | False | PASS | PASS | PASS | PASS |
