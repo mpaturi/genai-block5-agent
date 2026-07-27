@@ -9,7 +9,7 @@ pass. Both steps are fixed, parameterized Cypher queries - never an
 arbitrary, agent-written query. Read-only: never MERGE/CREATE/DELETE.
 
 This file's verification logic is its own, separate implementation from
-scripts/build_eval_answer_key.py's - not imported from there, per the
+block5_agent/build_eval_answer_key.py's - not imported from there, per the
 test-independence decision documented in that file's docstring: golden
 answers must come from logic that couldn't share a bug with the code
 being tested.

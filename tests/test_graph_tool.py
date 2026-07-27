@@ -1,6 +1,6 @@
 """Tests for the exact drug count tool.
 
-TDD: written before scripts/graph_tool.py exists - these tests define the
+TDD: written before block5_agent/graph_tool.py exists - these tests define the
 contract count_drugs() must satisfy. All should fail with an ImportError
 until Phase 3 implements it. The Neo4j driver is faked throughout, so none
 of this needs a real graph database running.
@@ -8,7 +8,7 @@ of this needs a real graph database running.
 from neo4j import Query
 from neo4j.exceptions import ClientError
 
-from scripts.graph_tool import GRAPH_QUERY_TIMEOUT, GraphServiceError, count_drugs
+from block5_agent.graph_tool import GRAPH_QUERY_TIMEOUT, GraphServiceError, count_drugs
 
 _CONDITION = "Essential hypertension"
 _LAB = "SBP"

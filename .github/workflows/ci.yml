@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # Matches the Neo4j version Block 3 runs locally (see
-    # genai-block3-graph-kb/docker-compose.yml). scripts/load_ci_graph_seed.py
+    # genai-block3-graph-kb/docker-compose.yml). block5_agent/load_ci_graph_seed.py
     # retries until this is actually ready, rather than relying on a
     # Docker healthcheck here.
     services:
@@ -36,12 +36,12 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: ci_test_password
           NEO4J_DATABASE: neo4j
-        run: python -m scripts.load_ci_graph_seed
+        run: python -m block5_agent.load_ci_graph_seed
 
       - name: Run tests
         run: python -m pytest
 
-      # USE_RAG_FIXTURES replays scripts/capture_rag_fixtures.py's recorded
+      # USE_RAG_FIXTURES replays block5_agent/capture_rag_fixtures.py's recorded
       # responses instead of calling the live RAG service, which CI has no
       # access to. USE_STUB_ANSWER_FN swaps in a fixed placeholder instead
       # of a real Claude call for the answer-writing step - none of the
@@ -61,4 +61,4 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: ci_test_password
           NEO4J_DATABASE: neo4j
-        run: python -m scripts.run_eval
+        run: python -m block5_agent.run_eval

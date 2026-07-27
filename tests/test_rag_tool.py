@@ -1,13 +1,13 @@
 """Tests for the semantic patient search tool.
 
-TDD: written before scripts/rag_tool.py exists - these tests define the
+TDD: written before block5_agent/rag_tool.py exists - these tests define the
 contract search_patients() must satisfy. All should fail with an
 ImportError until Phase 3 implements it. HTTP is mocked throughout, so
 none of this needs the real search service running.
 """
 import requests
 
-from scripts.rag_tool import RAGServiceError, search_patients
+from block5_agent.rag_tool import RAGServiceError, search_patients
 
 
 class _FakeResponse:
@@ -39,7 +39,7 @@ def test_search_patients_returns_deduped_ordered_ids_on_a_hit(monkeypatch):
         captured_calls.append((args, kwargs))
         return _FakeResponse(200, body)
 
-    monkeypatch.setattr("scripts.rag_tool.requests.post", _fake_post)
+    monkeypatch.setattr("block5_agent.rag_tool.requests.post", _fake_post)
 
     result = search_patients(
         "patients with hypertension and SBP above 140",
@@ -82,7 +82,7 @@ def test_search_patients_handles_a_miss_as_success_not_an_error(monkeypatch):
         "retrieved_count": 0,
     }
     monkeypatch.setattr(
-        "scripts.rag_tool.requests.post",
+        "block5_agent.rag_tool.requests.post",
         lambda *a, **k: _FakeResponse(200, body),
     )
 
@@ -98,7 +98,7 @@ def test_search_patients_handles_a_miss_as_success_not_an_error(monkeypatch):
 def test_search_patients_raises_on_upstream_502(monkeypatch):
     body = {"error": "Retrieval service unavailable. Please try again shortly.", "detail": "pinecone_timeout"}
     monkeypatch.setattr(
-        "scripts.rag_tool.requests.post",
+        "block5_agent.rag_tool.requests.post",
         lambda *a, **k: _FakeResponse(502, body),
     )
 
@@ -121,7 +121,7 @@ def test_search_patients_raises_on_connection_error(monkeypatch):
     def _raise(*args, **kwargs):
         raise requests.exceptions.ConnectionError("connection refused")
 
-    monkeypatch.setattr("scripts.rag_tool.requests.post", _raise)
+    monkeypatch.setattr("block5_agent.rag_tool.requests.post", _raise)
 
     try:
         search_patients(
@@ -140,7 +140,7 @@ def test_search_patients_raises_on_connection_error(monkeypatch):
 
 def test_search_patients_raises_on_unexpected_status(monkeypatch):
     monkeypatch.setattr(
-        "scripts.rag_tool.requests.post",
+        "block5_agent.rag_tool.requests.post",
         lambda *a, **k: _FakeResponse(500, {}),
     )
 
@@ -172,7 +172,7 @@ def test_search_patients_raises_on_invalid_filter_422(monkeypatch):
         ]
     }
     monkeypatch.setattr(
-        "scripts.rag_tool.requests.post",
+        "block5_agent.rag_tool.requests.post",
         lambda *a, **k: _FakeResponse(422, body),
     )
 
@@ -196,7 +196,7 @@ def test_search_patients_rejects_bad_top_k_before_any_http_call(monkeypatch):
     def _fail_if_called(*args, **kwargs):
         raise AssertionError("should not make an HTTP call for invalid top_k")
 
-    monkeypatch.setattr("scripts.rag_tool.requests.post", _fail_if_called)
+    monkeypatch.setattr("block5_agent.rag_tool.requests.post", _fail_if_called)
 
     try:
         search_patients(

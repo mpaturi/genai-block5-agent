@@ -1,6 +1,6 @@
 """One-off script: captures real RAG API responses for every task in
 data/eval/tasks.json, so CI can replay them without needing a live RAG
-service or Pinecone/Anthropic access (see scripts/run_eval.py's
+service or Pinecone/Anthropic access (see block5_agent/run_eval.py's
 USE_RAG_FIXTURES support). Not part of CI itself - run manually, once,
 and commit the result. Re-run only if the underlying patient data or eval
 questions change.
@@ -8,8 +8,8 @@ questions change.
 import json
 from pathlib import Path
 
-from scripts.rag_tool import search_patients
-from scripts.schemas import QuestionInput, build_rag_query
+from block5_agent.rag_tool import search_patients
+from block5_agent.schemas import QuestionInput, build_rag_query
 
 TASKS_PATH = Path("data/eval/tasks.json")
 FIXTURES_PATH = Path("data/eval/rag_fixtures.json")

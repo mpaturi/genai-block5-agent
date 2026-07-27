@@ -7,8 +7,8 @@ import os
 import sys
 from pathlib import Path
 
-from scripts.agent import run_agent
-from scripts.schemas import QuestionInput
+from block5_agent.agent import run_agent
+from block5_agent.schemas import QuestionInput
 
 TASKS_PATH = Path("data/eval/tasks.json")
 ANSWER_KEY_PATH = Path("data/eval/answer_key.json")
@@ -20,7 +20,7 @@ THRESHOLD = 0.70
 
 
 def _make_fixture_search_fn():
-    """A search_fn backed by scripts/capture_rag_fixtures.py's recorded
+    """A search_fn backed by block5_agent/capture_rag_fixtures.py's recorded
     responses, for CI - which has no live RAG service to call. Only the
     search step is faked; count_fn and answer_fn always stay real."""
     fixtures = json.loads(FIXTURES_PATH.read_text())
@@ -31,7 +31,7 @@ def _make_fixture_search_fn():
         if query_text not in fixtures:
             raise RuntimeError(
                 f"USE_RAG_FIXTURES is set, but no fixture is recorded for query "
-                f"text {query_text!r}. Re-run scripts/capture_rag_fixtures.py "
+                f"text {query_text!r}. Re-run block5_agent/capture_rag_fixtures.py "
                 "if data/eval/tasks.json changed."
             )
         return fixtures[query_text]
@@ -147,7 +147,7 @@ def _write_report(summary: dict) -> None:
     lines = [
         "# Eval Results",
         "",
-        "This file is produced by `scripts/run_eval.py`, run against "
+        "This file is produced by `block5_agent/run_eval.py`, run against "
         f"{_describe_run_mode()}, per `docs/spec.md`'s Evaluation section.",
         "",
         f"**Task success rate: {summary['score']:.3f} "

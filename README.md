@@ -26,12 +26,12 @@ Full design reasoning lives in `docs/spec.md`; this file covers setup and how th
    ```
 5. Run the one-command setup check:
    ```
-   python -m scripts.run_all
+   python -m block5_agent.run_all
    ```
    Confirms the search service, graph database, language model key, and LangSmith tracing are all reachable, then runs one real example question through the agent as an end-to-end smoke test.
 6. Run the eval harness separately, on demand (not part of `run_all.py`):
    ```
-   python -m scripts.run_eval
+   python -m block5_agent.run_eval
    ```
    Runs the real agent against every question in `data/eval/tasks.json`, scores all three dimensions from `docs/spec.md`'s Evaluation section, and writes the report to `docs/eval_results.md`. Exits non-zero if the score drops below 0.70.
 7. Run the unit test suite:
@@ -72,7 +72,7 @@ See `docs/spec.md` for the full reasoning behind every design decision (why `dru
 ## Project structure
 
 ```
-scripts/    Agent code - see docs/spec.md's Agent steps for how each file fits together
+block5_agent/  Agent code - see docs/spec.md's Agent steps for how each file fits together
 tests/      pytest unit tests, written before their implementation existed (TDD) -
             tools are tested with mocked HTTP/Neo4j, the agent with swappable fakes,
             none needs a live service running
@@ -86,7 +86,7 @@ docs/       spec.md, plan.md, tasks.md, eval_results.md
 This project was built with [Claude Code](https://claude.com/claude-code) (Anthropic's CLI) working alongside a human developer, following a spec-first workflow: `docs/spec.md` (what and why) was written and iterated on before `docs/plan.md` (what to build and in what order) or any code. Each phase got its own branch.
 
 Notable practices used throughout:
-- **Test-driven development.** `tests/test_rag_tool.py`, `tests/test_graph_tool.py`, and `tests/test_agent_answers.py` were all written before `scripts/rag_tool.py`, `scripts/graph_tool.py`, and `scripts/agent.py` existed, confirmed to fail with `ModuleNotFoundError` first, then made to pass without changing the tests.
-- **Real services exercised during development, not just mocked.** Block 3's Neo4j and Block 4's RAG API were both run live throughout Phase 3 - `scripts/build_eval_answer_key.py`'s output was spot-checked against direct Cypher queries by hand, and `scripts/rag_tool.py`/`scripts/graph_tool.py` were each tried against the real services beyond their unit tests.
+- **Test-driven development.** `tests/test_rag_tool.py`, `tests/test_graph_tool.py`, and `tests/test_agent_answers.py` were all written before `block5_agent/rag_tool.py`, `block5_agent/graph_tool.py`, and `block5_agent/agent.py` existed, confirmed to fail with `ModuleNotFoundError` first, then made to pass without changing the tests.
+- **Real services exercised during development, not just mocked.** Block 3's Neo4j and Block 4's RAG API were both run live throughout Phase 3 - `block5_agent/build_eval_answer_key.py`'s output was spot-checked against direct Cypher queries by hand, and `block5_agent/rag_tool.py`/`block5_agent/graph_tool.py` were each tried against the real services beyond their unit tests.
 - **Ground truth computed, not hand-typed, and grounded in the live graph.** `data/eval/tasks.json`'s questions were chosen after querying the live graph for its actual whitelist of conditions/drugs/labs and testing real retrieval counts against the live RAG API, so the fixed eval set is confirmed to exercise all three confidence tiers rather than assumed to.
-- **Shared logic lives in exactly one place.** `scripts/schemas.py` holds the RAG-query-building, patient-ID dedupe/ordering, and confidence-tier functions that both the real agent and `scripts/build_eval_answer_key.py` import - never two independently written copies that could silently drift apart.
+- **Shared logic lives in exactly one place.** `block5_agent/schemas.py` holds the RAG-query-building, patient-ID dedupe/ordering, and confidence-tier functions that both the real agent and `block5_agent/build_eval_answer_key.py` import - never two independently written copies that could silently drift apart.

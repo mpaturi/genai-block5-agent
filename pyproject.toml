@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "block5_agent"
+version = "0.1.0"
+description = "Single-agent clinical reasoning app chaining Block 4's RAG service with Block 3's Neo4j graph"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph==1.2.9",
+    "langsmith==0.10.6",
+    "anthropic==0.116.0",
+    "pydantic==2.13.4",
+    "neo4j==6.2.0",
+    "requests==2.34.2",
+    "python-dotenv==1.2.2",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[tool.setuptools]
+packages = ["block5_agent"]
