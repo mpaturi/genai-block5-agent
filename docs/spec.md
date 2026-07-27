@@ -199,7 +199,7 @@ The question this tool receives is built directly from the `condition`,
 `lab`, `comparison`, and `value` fields (see What the agent does) —
 never the assembled full question string, and never including
 `drug_a`/`drug_b`. This text is built by one shared function (see
-`scripts/schemas.py` in plan.md), not reimplemented separately anywhere
+`block5_agent/schemas.py` in plan.md), not reimplemented separately anywhere
 it's needed — `rag_tool.py` and `build_eval_answer_key.py` (see
 Evaluation) both call it, so they always send RAG the exact same text
 for the same fields. Two independently written versions of this
@@ -361,7 +361,7 @@ does not imply `high`; it only means nothing broke.
 not the graph step's. It holds one entry per patient in
 `rag_patient_ids` — same patient set, same best-score-first order, built
 from the exact same dedupe pass via `build_rag_citations()` in
-`scripts/schemas.py` — each entry naming that patient's winning chunk's
+`block5_agent/schemas.py` — each entry naming that patient's winning chunk's
 ID and the chunk text itself (`patient_id`, `chunk_id`, `snippet`). It
 sits next to `rag_patient_ids`, never inside `graph_result`:
 `graph_result` is Neo4j's drug-count output only, and mixing RAG chunk
@@ -652,7 +652,7 @@ Not part of this block:
 - No login or access control on this agent.
 - This block does not expose its own web service — it's invoked directly
   as a script, the same way you'd run any of the other pieces by hand or
-  through `scripts/run_all.py`.
+  through `block5_agent/run_all.py`.
 
 ## Known limitations
 

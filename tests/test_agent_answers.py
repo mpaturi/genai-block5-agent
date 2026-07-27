@@ -1,7 +1,7 @@
 """Tests for the agent's fixed-wording outcomes.
 
-TDD: written before scripts/agent.py, scripts/rag_tool.py, and
-scripts/graph_tool.py exist - these tests define the contract run_agent()
+TDD: written before block5_agent/agent.py, block5_agent/rag_tool.py, and
+block5_agent/graph_tool.py exist - these tests define the contract run_agent()
 must satisfy on every path except full success. All should fail with an
 ImportError until Phase 3 implements the agent and both tools.
 
@@ -19,10 +19,10 @@ itself.
 """
 import pytest
 
-from scripts.agent import run_agent
-from scripts.graph_tool import GraphServiceError
-from scripts.rag_tool import RAGServiceError
-from scripts.schemas import QuestionInput, assemble_question_text
+from block5_agent.agent import run_agent
+from block5_agent.graph_tool import GraphServiceError
+from block5_agent.rag_tool import RAGServiceError
+from block5_agent.schemas import QuestionInput, assemble_question_text
 
 QUESTION = QuestionInput(
     condition="hypertension",

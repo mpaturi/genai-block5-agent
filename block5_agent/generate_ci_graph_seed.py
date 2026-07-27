@@ -75,7 +75,7 @@ support.
 import json
 from pathlib import Path
 
-from scripts.schemas import QuestionInput, build_rag_query
+from block5_agent.schemas import QuestionInput, build_rag_query
 
 TASKS_PATH = Path("data/eval/tasks.json")
 ANSWER_KEY_PATH = Path("data/eval/answer_key.json")

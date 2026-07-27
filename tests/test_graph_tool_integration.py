@@ -5,7 +5,7 @@ check what count_drugs() does with whatever a fake session hands back.
 
 Needs a Neo4j instance reachable via the same NEO4J_* env vars
 graph_tool.py itself reads, already loaded with
-data/eval/ci_graph_seed.cypher (see scripts/load_ci_graph_seed.py) - which
+data/eval/ci_graph_seed.cypher (see block5_agent/load_ci_graph_seed.py) - which
 is exactly what CI's "Load CI graph seed" step does before "Run tests" in
 .github/workflows/ci.yml, so this runs there with no extra wiring. Skips
 itself if that data isn't present, so a local `pytest` run against an
@@ -17,7 +17,7 @@ data/eval/answer_key.json, so it can only ever reproduce a count
 graph_tool.py's own verify+count logic already computed - it can't catch
 a real bug in that logic (an AND that regressed to an OR, the wrong lab
 property, a dropped clause), since the seed would just be regenerated to
-match whatever the buggy code produces. scripts/generate_ci_graph_seed.py
+match whatever the buggy code produces. block5_agent/generate_ci_graph_seed.py
 adds one exception: a hand-written patient (_EDGE_CASE_PERSON_ID) who
 genuinely has q7's condition (HAS_CONDITION) but fails its BMI check, and
 carries a drug name used nowhere else in the seed. If verification's AND
@@ -46,7 +46,7 @@ import pytest
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
-from scripts.graph_tool import count_drugs
+from block5_agent.graph_tool import count_drugs
 
 load_dotenv()
 
@@ -55,7 +55,7 @@ _CONDITION = "Streptococcal pharyngitis"
 _LAB = "BMI"
 _COMPARISON = "below"
 _VALUE = 25
-# See scripts/generate_ci_graph_seed.py - one of q7's real verified
+# See block5_agent/generate_ci_graph_seed.py - one of q7's real verified
 # patients (top_k=25, so q7 verifies 25 real patients; any one of them
 # works here), and the hand-written patient who should always fail
 # verification.
@@ -98,7 +98,7 @@ def test_count_drugs_excludes_a_patient_who_fails_verification_on_live_data():
         pytest.skip(
             "data/eval/ci_graph_seed.cypher doesn't look loaded into this "
             "Neo4j instance (no reachable Neo4j, or the edge-case fixture "
-            "patient isn't present) - run scripts.load_ci_graph_seed first "
+            "patient isn't present) - run block5_agent.load_ci_graph_seed first "
             "(CI does this automatically)"
         )
 

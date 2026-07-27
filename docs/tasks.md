@@ -18,7 +18,7 @@ No code this phase.
 The agent doesn't exist yet — this phase only writes down what "correct"
 looks like.
 
-- [x] Write `scripts/schemas.py` (the answer object, agent state, the
+- [x] Write `block5_agent/schemas.py` (the answer object, agent state, the
       structured question input: `condition`, `lab`, `comparison`,
       `value`, `drug_a`, `drug_b`, and the one shared function that
       builds the RAG query text from `condition`/`lab`/`comparison`/
@@ -34,14 +34,14 @@ looks like.
       `value`, `drug_a`, `drug_b` fields, not one opaque string (see
       `docs/spec.md`'s Question pattern) — derive the assembled full-text
       question from these fields for display/logging only
-- [x] Write `scripts/build_eval_answer_key.py` — call the live search
+- [x] Write `block5_agent/build_eval_answer_key.py` — call the live search
       service and live graph directly (not through `rag_tool.py`/
       `graph_tool.py`, which don't exist yet) — and run it to write
       `data/eval/answer_key.json`: the correct patient list, drug count,
       and expected `confidence` (from the same rule in `docs/spec.md`'s
       Structured output section) for each answerable question, keyed by
       the same question ID. Import and use the shared query-building
-      function from `scripts/schemas.py` to build the search-service call
+      function from `block5_agent/schemas.py` to build the search-service call
       — do not write a second, separate version of that formatting logic
       — so the golden patient list matches what the agent will actually
       produce. Dedupe and order the raw result using Tool 1's exact rule
@@ -65,17 +65,17 @@ looks like.
 ## Phase 3 — Build it (`phase-3-implement`, base: `phase-2-tdd`)
 
 - [x] Set up `requirements.txt`, `.env.example`, virtual environment
-- [x] Write `scripts/check_connection.py` — confirm the search service,
+- [x] Write `block5_agent/check_connection.py` — confirm the search service,
       graph database, language model key, and tracing service are all
       reachable
-- [x] Write `scripts/rag_tool.py` — import the shared query-building
-      function from `scripts/schemas.py` (the same one
+- [x] Write `block5_agent/rag_tool.py` — import the shared query-building
+      function from `block5_agent/schemas.py` (the same one
       `build_eval_answer_key.py` used in Phase 2) rather than writing a
       second version of it — get its tests passing
 - [x] Try a real search by hand
-- [x] Write `scripts/graph_tool.py` — get its tests passing
+- [x] Write `block5_agent/graph_tool.py` — get its tests passing
 - [x] Try a real count by hand
-- [x] Write `scripts/agent.py` — returns whether the count step ran
+- [x] Write `block5_agent/agent.py` — returns whether the count step ran
       alongside the answer object
 - [x] `pytest tests/test_agent_answers.py` — all pass
 - [x] Confirm the returned "did the count step run" value is correct on
@@ -86,16 +86,16 @@ looks like.
       and the answer matches the fixed "nothing found" wording exactly
 - [x] Confirm every step of a run is traced, with token counts on the
       answer-writing step
-- [x] Write `scripts/logging_utils.py` and wire it in
+- [x] Write `block5_agent/logging_utils.py` and wire it in
 - [x] Confirm a run produces a correctly shaped log entry
-- [x] Write `scripts/run_eval.py`, run it, record the score
+- [x] Write `block5_agent/run_eval.py`, run it, record the score
 - [x] Investigate real recall at the agent's actual `top_k=5` setting,
       measured directly against the graph's true patient counts for Block
       5's own 8 answerable questions (not borrowed from Block 4's separate
       eval set) — document the finding in `docs/spec.md`'s Important
       honesty point section, including whether raising `top_k` helps
 - [x] Write `docs/eval_results.md`
-- [x] Write `scripts/run_all.py` and `README.md`
+- [x] Write `block5_agent/run_all.py` and `README.md`
 - [x] Commit, push, open PR (base `phase-2-tdd`)
 
 ## Phase 4 — CI (`phase-4-ci`, base: `phase-3-implement`)
@@ -118,12 +118,12 @@ looks like.
       (`condition`/`lab`/`comparison`/`value`), added TODO markers on the
       two now-obsolete recall paragraphs (numbers not guessed, left for
       Phase 6)
-- [x] Extend `scripts/rag_tool.py`'s `search_patients()` to forward
+- [x] Extend `block5_agent/rag_tool.py`'s `search_patients()` to forward
       `condition`/`lab`/`comparison`/`value` as structured filter fields to
       Block 4's `/query`, alongside the free-text query
-- [x] Update `scripts/agent.py`'s `search_node` to pass the question's
+- [x] Update `block5_agent/agent.py`'s `search_node` to pass the question's
       filter fields through and call at `top_k=20`
-- [x] Update `scripts/build_eval_answer_key.py` to forward the same filter
+- [x] Update `block5_agent/build_eval_answer_key.py` to forward the same filter
       fields, so the golden answer key is built from the same candidate
       set the real agent now retrieves
 - [x] Confirm the locally running RAG service was serving stale,
@@ -133,7 +133,7 @@ looks like.
 - [x] Recapture `data/eval/rag_fixtures.json` and regenerate
       `data/eval/answer_key.json` against the live, filter-aware service
 - [x] Update `tests/test_rag_tool.py`, `tests/test_agent_answers.py`, and
-      `scripts/run_eval.py` for the new signature and `top_k` — all 21
+      `block5_agent/run_eval.py` for the new signature and `top_k` — all 21
       tests pass, fixture-mode eval scores 11/11
 - [x] Measure real recall directly against the graph for all 8 answerable
       questions (not borrowed from Block 4's eval) — mean recall 0.761, up
@@ -142,7 +142,7 @@ looks like.
 
 ## Phase 6 — Confidence recalibration (`phase-6-confidence-recalibration`, base: `phase-5-rag-filter-wiring`)
 
-- [x] Recalibrate `compute_confidence()`'s tiers in `scripts/schemas.py`,
+- [x] Recalibrate `compute_confidence()`'s tiers in `block5_agent/schemas.py`,
       using the same design principle as the original thresholds (`high`
       reachable at Tool 1's actual ceiling, not trivial, not practically
       unreachable) scaled to the new `top_k=20` default, grounded in the
@@ -170,11 +170,11 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       stale-service problem Phase 5 hit. Deferred every item below that
       needs live, filter-aware `top_k=25` data until the service is
       confirmed updated
-- [x] Update `scripts/rag_tool.py`'s `search_patients()` default and
+- [x] Update `block5_agent/rag_tool.py`'s `search_patients()` default and
       pre-flight validation range from `1–20` to `1–25`
-- [x] Update the call site in `scripts/agent.py`, both eval-fixture
-      generators (`scripts/build_eval_answer_key.py`,
-      `scripts/capture_rag_fixtures.py`), and `scripts/run_eval.py`'s
+- [x] Update the call site in `block5_agent/agent.py`, both eval-fixture
+      generators (`block5_agent/build_eval_answer_key.py`,
+      `block5_agent/capture_rag_fixtures.py`), and `block5_agent/run_eval.py`'s
       fixture-replay stub signature
 - [x] Update `tests/test_rag_tool.py`'s `invalid_top_k` boundary test
       (`top_k=21` → `26`) and `tests/test_agent_answers.py`'s fakes/
@@ -185,16 +185,16 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       `top_k=25` succeeds (25 sources returned) and `top_k=26` is still
       rejected (`"top_k must be between 1 and 25"`)
 - [x] Recapture `data/eval/rag_fixtures.json` via
-      `scripts/capture_rag_fixtures.py` and regenerate
-      `data/eval/answer_key.json` via `scripts/build_eval_answer_key.py`
+      `block5_agent/capture_rag_fixtures.py` and regenerate
+      `data/eval/answer_key.json` via `block5_agent/build_eval_answer_key.py`
       against the live, `top_k=25`-capable service
-- [x] Recalibrate `compute_confidence()`'s tiers in `scripts/schemas.py`
+- [x] Recalibrate `compute_confidence()`'s tiers in `block5_agent/schemas.py`
       (`low` < 15, `medium` 15–24, `high` >= 25), grounded in the real
       per-question verified-patient counts the regenerated answer key
       produced — 1, 3, 3, 8, 18, 19, 25, 25 — not guessed; re-ran
       `build_eval_answer_key.py` again afterward so the golden answers'
       `confidence` field reflects the new thresholds
-- [x] Re-ran `scripts/run_eval.py` (fixture mode, matching CI) — 11/11,
+- [x] Re-ran `block5_agent/run_eval.py` (fixture mode, matching CI) — 11/11,
       updated `docs/eval_results.md`
 - [x] Measured true per-question population directly against the graph
       (not RAG/agent) for all 8 answerable questions, independent of and
@@ -214,7 +214,7 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       `answer_key.json`/`rag_fixtures.json` both changed, so the CI
       service's seeded graph still only had the old, smaller
       per-question verified-patient sets baked in. Re-ran
-      `scripts/generate_ci_graph_seed.py`; verified against an isolated
+      `block5_agent/generate_ci_graph_seed.py`; verified against an isolated
       ephemeral Neo4j container (not the real Block 3 graph, matching
       CI's `neo4j:5.18-community` service) — full test suite (21/21) and
       `run_eval.py` in fixture mode both pass, score back to 1.000
@@ -242,8 +242,8 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
 ## Phase 8 — Expose outcome (`phase-8-expose-outcome`, base: `phase-7-filtered-top-k-ceiling`)
 
 - [x] Added `outcome: Literal["answered", "nothing_found", "tool_error"]`
-      to `ClinicalAnswer` (`scripts/schemas.py`), threaded through
-      `scripts/agent.py`'s five construction sites from the outcome value
+      to `ClinicalAnswer` (`block5_agent/schemas.py`), threaded through
+      `block5_agent/agent.py`'s five construction sites from the outcome value
       each one already computed, so a caller (a future Block 6
       orchestrator) can tell a genuine tool failure apart from a
       legitimate low-confidence success without parsing `caveat`'s free
@@ -264,9 +264,9 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       commits is an ancestor of this branch, and none of the three fixes
       was ever folded forward. Folded in all three:
   - [x] Phase 3's Neo4j timeout fix (`9d9375e` on `phase-3-implement`) —
-        `scripts/graph_tool.py` here had no timeout at all on its
+        `block5_agent/graph_tool.py` here had no timeout at all on its
         `session.run()` calls. Nothing else had touched that file since
-        (confirmed via `git log --all -- scripts/graph_tool.py`), so
+        (confirmed via `git log --all -- block5_agent/graph_tool.py`), so
         `git cherry-pick 9d9375e` applied with no conflicts
   - [x] Phase 4's CI-seed edge-case fix (`2af8057` on `phase-4-ci`) —
         real design work, not a copy-paste, since `c8d8737` (already in
@@ -333,7 +333,7 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
 
 ## Phase 9 — RAG citations (`phase-9-rag-citations`, base: `phase-8-expose-outcome`)
 
-- [x] `scripts/schemas.py`: refactor `dedupe_and_order_patient_ids()`'s
+- [x] `block5_agent/schemas.py`: refactor `dedupe_and_order_patient_ids()`'s
       internals into a shared private `_dedupe_best_sources(sources) ->
       dict[int, dict]` (patient_id → its full winning source dict, not
       just the score) plus a small `_order_patient_ids_best_score_first()`
@@ -352,10 +352,10 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
 - [x] Add `rag_citations: list[dict]` to `ClinicalAnswer`, next to
       `rag_patient_ids` — not inside `graph_result`, which is Neo4j drug
       counts only. Add `rag_citations: list[dict]` to `AgentState` too
-- [x] `scripts/rag_tool.py`: `search_patients()`'s 200 branch returns
+- [x] `block5_agent/rag_tool.py`: `search_patients()`'s 200 branch returns
       `"citations": build_rag_citations(body["sources"])` alongside
       `"patient_ids"` and `"retrieved_count"`
-- [x] `scripts/agent.py`: `initial_state` defaults `rag_citations` to
+- [x] `block5_agent/agent.py`: `initial_state` defaults `rag_citations` to
       `[]`, mirroring `rag_patient_ids`. `count_node`'s two branches both
       add `"rag_citations": state["rag_result"]["citations"]`. Every
       `ClinicalAnswer(...)` site gets `rag_citations` following
@@ -365,7 +365,7 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       `build_answer_error_answer_node`), `[]` where `rag_patient_ids=[]`
       is used (`build_fallback_answer_node`,
       `build_search_error_answer_node`). No new logic branches
-- [x] Confirmed `scripts/build_eval_answer_key.py` needs no changes — it
+- [x] Confirmed `block5_agent/build_eval_answer_key.py` needs no changes — it
       only ever imports `dedupe_and_order_patient_ids` for the golden
       patient list, never chunk text
 - [x] Updated `tests/test_rag_tool.py`'s existing hit-test fixture with
@@ -395,21 +395,55 @@ Block 5's `search_patients()` always sends a `condition`/`lab`/
       rag_fixtures.json` was NOT regenerated this phase — Block 4's
       `phase-10-chunk-text-citations` (the source of `chunk_text`) isn't
       available to call yet. The cached fixtures predate this change and
-      have no `"citations"` key at all, so `scripts/run_eval.py` with
+      have no `"citations"` key at all, so `block5_agent/run_eval.py` with
       `USE_RAG_FIXTURES` set (matching CI) will `KeyError` on
       `state["rag_result"]["citations"]` in `count_node` until
-      `scripts/capture_rag_fixtures.py` is re-run once Block 4's phase
+      `block5_agent/capture_rag_fixtures.py` is re-run once Block 4's phase
       lands — the same category of follow-up as the `top_k=25` fixture
       regeneration in Phase 7. CI on this branch is expected to fail on
       the "Run evaluation" step until then; this is a known, deliberate
       gap, not a bug
 - [x] **Gap resolved:** Block 4's `phase-10-chunk-text-citations` landed,
-      so re-ran `scripts/capture_rag_fixtures.py` against the live search
+      so re-ran `block5_agent/capture_rag_fixtures.py` against the live search
       service — `data/eval/rag_fixtures.json` now carries real
       `chunk_text`-derived `"citations"` per fixture.
       `build_eval_answer_key.py`'s output untouched (it never used
       `chunk_text`). Verified: full `pytest` suite (24 passed, 1
-      pre-existing skip) and `scripts/run_eval.py` in fixture mode
+      pre-existing skip) and `block5_agent/run_eval.py` in fixture mode
       (11/11, `docs/eval_results.md` byte-identical — citations don't
       affect any of the three scored dimensions) both green. Commit, push
 - [x] Commit, push
+
+## Phase 10 — Real packaging (`phase-10-packaging`, base: `main`)
+
+Block 6 needs to install and import this repo's agent code properly,
+instead of reaching into this folder's directory layout directly.
+
+- [x] Renamed `scripts/` to `block5_agent/` (`git mv`, preserving history),
+      added `block5_agent/__init__.py`
+- [x] Updated every internal `from scripts.X import Y` / `from scripts
+      import X` and every `scripts/`-prefixed comment, docstring, and
+      `monkeypatch.setattr` string target across `block5_agent/*.py` and
+      `tests/*.py` to `block5_agent` — found via grep, not memory
+- [x] Updated `.github/workflows/ci.yml`'s two `python -m scripts.X`
+      invocations and its comments to `block5_agent`
+- [x] Added a minimal `pyproject.toml` (setuptools backend) declaring
+      `block5_agent` as an installable package, with `dependencies`
+      mirroring `requirements.txt`'s runtime packages and `pytest` moved
+      to an `optional-dependencies.test` extra, since it's a test-only
+      dependency, not something Block 6 needs to import this package
+- [x] Grepped every doc (`README.md`, `docs/spec.md`, `docs/plan.md`,
+      `docs/tasks.md`, `docs/eval_results.md`) for the old `scripts.`/
+      `scripts/` module path and updated every hit to `block5_agent` —
+      including this file's own Phase 1–9 history, at the user's explicit
+      request, so no doc describes a package name that no longer matches
+      the real code. The one surviving `scripts` hit, `README.md`'s
+      `uvicorn scripts.api:app` line, is Block 4's own module in a
+      different repo and was correctly left alone
+- [x] No `pytest.ini`/`conftest.py` exist in this repo; none needed adding
+      — `python -m pytest` already puts the repo root on `sys.path`,
+      which resolves `import block5_agent` the same way it resolved
+      `import scripts` before the rename
+- [x] Ran the full test suite after the rename — all green before
+      committing
+- [x] Commit, push, open PR (base `main`)

@@ -13,7 +13,7 @@ import os
 import requests
 from dotenv import load_dotenv
 
-from scripts.schemas import build_rag_citations, dedupe_and_order_patient_ids
+from block5_agent.schemas import build_rag_citations, dedupe_and_order_patient_ids
 
 load_dotenv()
 

@@ -1,19 +1,19 @@
 """One-command setup check: confirms every external dependency is
-reachable (scripts/check_connection.py), then runs one real example
+reachable (block5_agent/check_connection.py), then runs one real example
 question through the agent as an end-to-end smoke test.
 
 There's no data pipeline of Block 5's own to run here - RAG and the graph
 are already Block 3/4's completed pipelines, this repo only calls them.
-Does NOT run scripts/run_eval.py, which stays a separate, deliberate
+Does NOT run block5_agent/run_eval.py, which stays a separate, deliberate
 command you run on purpose (mirrors Block 3/4's run_all.py convention).
 
-Run with: python -m scripts.run_all (from the repo root).
+Run with: python -m block5_agent.run_all (from the repo root).
 """
 import sys
 
-from scripts import check_connection
-from scripts.agent import run_agent
-from scripts.schemas import QuestionInput
+from block5_agent import check_connection
+from block5_agent.agent import run_agent
+from block5_agent.schemas import QuestionInput
 
 _SMOKE_TEST_QUESTION = QuestionInput(
     condition="Essential hypertension",

@@ -25,7 +25,7 @@ import requests
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
-from scripts.schemas import (
+from block5_agent.schemas import (
     QuestionInput,
     build_rag_query,
     compute_confidence,

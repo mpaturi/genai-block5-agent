@@ -15,10 +15,10 @@ from dotenv import load_dotenv
 from langgraph.graph import END, StateGraph
 from langsmith.wrappers import wrap_anthropic
 
-from scripts.graph_tool import GraphServiceError, count_drugs
-from scripts.logging_utils import log_run
-from scripts.rag_tool import RAGServiceError, search_patients
-from scripts.schemas import (
+from block5_agent.graph_tool import GraphServiceError, count_drugs
+from block5_agent.logging_utils import log_run
+from block5_agent.rag_tool import RAGServiceError, search_patients
+from block5_agent.schemas import (
     AgentState,
     ClinicalAnswer,
     QuestionInput,
