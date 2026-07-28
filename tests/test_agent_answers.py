@@ -69,7 +69,7 @@ def test_nothing_found_short_circuits_to_fixed_fallback_answer():
     )
     count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
 
-    answer, count_step_ran = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
+    answer, count_step_ran, cost_info = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
 
     assert search_fn.call_count == 1
     # The agent forwards top_k=25 (up from 20, Block 4's raised
@@ -98,7 +98,7 @@ def test_search_step_broken_after_retries_returns_fixed_error_answer():
     search_fn = _CountingFake(_always_raise(RAGServiceError("connection_error")))
     count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
 
-    answer, count_step_ran = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
+    answer, count_step_ran, cost_info = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
 
     # 2 retries => 3 attempts total, per docs/spec.md's Agent steps section.
     assert search_fn.call_count == 3
@@ -130,7 +130,7 @@ def test_graph_step_broken_after_retries_returns_degraded_answer():
     )
     count_fn = _CountingFake(_always_raise(GraphServiceError("ServiceUnavailable")))
 
-    answer, count_step_ran = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
+    answer, count_step_ran, cost_info = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
 
     assert search_fn.call_count == 1
     # 2 retries => 3 attempts total, per docs/spec.md's Agent steps section.
@@ -178,7 +178,7 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
     )
     answer_fn = _CountingFake(_always_raise(ValueError("unparseable model output")))
 
-    answer, count_step_ran = run_agent(
+    answer, count_step_ran, cost_info = run_agent(
         QUESTION, search_fn=search_fn, count_fn=count_fn, answer_fn=answer_fn
     )
 
@@ -232,7 +232,7 @@ def test_full_success_threads_rag_citations_alongside_patient_ids():
     )
     answer_fn = _CountingFake(lambda *args: "Two patients are on Lisinopril, one on Amlodipine.")
 
-    answer, count_step_ran = run_agent(
+    answer, count_step_ran, cost_info = run_agent(
         QUESTION, search_fn=search_fn, count_fn=count_fn, answer_fn=answer_fn
     )
 
@@ -240,3 +240,12 @@ def test_full_success_threads_rag_citations_alongside_patient_ids():
     assert answer.outcome == "answered"
     assert answer.rag_patient_ids == [1, 2, 3]
     assert answer.rag_citations == citations
+
+    # cost_info reports real, measured cost/token usage for this run - see
+    # docs/spec.md's Tracing and logging. The fake answer_fn above returns a
+    # plain string, not a (text, input_tokens, output_tokens) tuple, so no
+    # real language-model call happened and usage is 0/$0 here.
+    assert set(cost_info) == {"cost_usd", "input_tokens", "output_tokens"}
+    for key in ("cost_usd", "input_tokens", "output_tokens"):
+        assert isinstance(cost_info[key], (int, float))
+        assert cost_info[key] >= 0
