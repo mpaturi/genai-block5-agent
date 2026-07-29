@@ -659,6 +659,23 @@ Not part of this block:
 - The evaluation's "correct" counts depend on whatever the search service
   currently returns. If that service's behavior changes later, the
   correct answers may need to be recalculated.
+- `data/eval/ci_graph_seed.cypher`'s q1 population (Essential hypertension,
+  SBP > 140) was originally seeded with only the exact 25 patients RAG's
+  own `top_k=25` search returns — correct at the time (Phase 4's
+  25-patients-checked verification really did match 25 = 25), but too
+  small to ever expose the gap described above (see Important honesty
+  point): the golden answer and the agent's necessarily-capped output
+  could never disagree, no matter how large the true population really
+  was. The seed has since been corrected to carry the true, exhaustive
+  99-patient population, independently verified by direct Neo4j count
+  against the seed once loaded, not assumed (99 total, Lisinopril 49,
+  Amlodipine 28, Hydrochlorothiazide 11 — see
+  `data/eval/answer_key.json`'s q1 entry). RAG's own capped search still
+  returns only 25 of those 99, so q1 now fails Block 5's own accuracy
+  check permanently, by design — the evaluation's answerable-question
+  pass rate is genuinely **7 of 8, not 8 of 8** (10/11 overall, see
+  `docs/eval_results.md`), and that failure is the intended, honest
+  outcome, not a bug to fix.
 - Only the full-success case's `answer` is freely written, by the
   language model, describing the real counts. Nothing automatically
   checks that this write-up is worded accurately — the evaluation checks
