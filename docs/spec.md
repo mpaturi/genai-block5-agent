@@ -543,6 +543,13 @@ non-deterministic call to the language model.
   afterward, since nothing links a specific log line to a specific
   question. The log file still records it too, for a persistent history
   of every run, but that's a side effect, not the evaluation's source.
+- The agent's function returns a third value the same way: `cost_info`,
+  a dict with `cost_usd`, `input_tokens`, and `output_tokens` — the same
+  real, measured numbers just written to the log entry above, handed back
+  directly so a caller doesn't have to go read the log file to see what a
+  run cost. It reads 0 tokens/$0 when the answer-writing step was stubbed
+  (see Evaluation's `USE_STUB_ANSWER_FN`), since no real Claude call
+  happened for that part.
 - The exact dollar-rate used to estimate cost needs to be checked against
   the language model provider's current published pricing when this is
   built — it isn't fixed in this document, since pricing can change over

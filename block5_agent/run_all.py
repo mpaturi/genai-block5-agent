@@ -36,9 +36,10 @@ def main() -> int:
             return code
 
     print("\n=== smoke test: one real question through the agent ===")
-    answer, count_step_ran = run_agent(_SMOKE_TEST_QUESTION)
+    answer, count_step_ran, cost_info = run_agent(_SMOKE_TEST_QUESTION)
     print(answer.model_dump_json(indent=2))
     print(f"count_step_ran: {count_step_ran}")
+    print(f"cost_info: {cost_info}")
 
     print("\nrun_all.py complete - setup check and a real agent run both succeeded.")
     return 0

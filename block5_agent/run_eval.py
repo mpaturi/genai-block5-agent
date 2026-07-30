@@ -98,7 +98,7 @@ def run_evaluation() -> dict:
             drug_a=task["drug_a"],
             drug_b=task["drug_b"],
         )
-        answer, count_step_ran = run_agent(question, **run_agent_kwargs)
+        answer, count_step_ran, cost_info = run_agent(question, **run_agent_kwargs)
         golden = answer_key.get(task["id"])
 
         checks = {

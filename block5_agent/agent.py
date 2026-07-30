@@ -89,13 +89,18 @@ def run_agent(
     search_fn=search_patients,
     count_fn=count_drugs,
     answer_fn=_default_answer_fn,
-) -> tuple[ClinicalAnswer, bool]:
+) -> tuple[ClinicalAnswer, bool, dict]:
     """Run one clinical question through the agent.
 
-    Returns (answer, count_step_ran). count_step_ran is handed back
-    directly here, not read back from the log (see docs/spec.md's Tracing
-    and logging), so a caller like run_eval.py can check tool-call
-    correctness straight from the call it just made.
+    Returns (answer, count_step_ran, cost_info). count_step_ran is handed
+    back directly here, not read back from the log (see docs/spec.md's
+    Tracing and logging), so a caller like run_eval.py can check tool-call
+    correctness straight from the call it just made. cost_info is the
+    real, measured cost/token usage for this run - {"cost_usd",
+    "input_tokens", "output_tokens"} - taken from the same log entry
+    written to data/logs/runs.jsonl. It reads 0 tokens/$0 when
+    USE_STUB_ANSWER_FN stubbed the answer step, since no real Claude call
+    happened for that part.
     """
     node_latency_ms: dict[str, float] = {}
     token_usage = {"input_tokens": 0, "output_tokens": 0}
@@ -378,12 +383,17 @@ def run_agent(
     final_state = compiled.invoke(initial_state)
     answer = ClinicalAnswer.model_validate(final_state["final_answer"])
 
-    log_run(
+    log_entry = log_run(
         question=answer.question,
         node_latency_ms={k: round(v, 2) for k, v in node_latency_ms.items()},
         claude_input_tokens=token_usage["input_tokens"],
         claude_output_tokens=token_usage["output_tokens"],
         outcome=final_state["outcome"],
     )
+    cost_info = {
+        "cost_usd": log_entry["cost_usd"],
+        "input_tokens": log_entry["claude_input_tokens"],
+        "output_tokens": log_entry["claude_output_tokens"],
+    }
 
-    return answer, final_state["count_step_ran"]
+    return answer, final_state["count_step_ran"], cost_info
