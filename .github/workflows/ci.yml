@@ -38,7 +38,17 @@ jobs:
           NEO4J_DATABASE: neo4j
         run: python -m block5_agent.load_ci_graph_seed
 
+      # tests/test_build_eval_answer_key.py imports block5_agent/build_eval_answer_key.py,
+      # which reads NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD from the environment
+      # at import time (no default, unlike graph_tool.py) - these tests
+      # never touch a real Neo4j (the driver is faked throughout), but the
+      # module import itself still needs the env vars to exist.
       - name: Run tests
+        env:
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: ci_test_password
+          NEO4J_DATABASE: neo4j
         run: python -m pytest
 
       # USE_RAG_FIXTURES replays block5_agent/capture_rag_fixtures.py's recorded
