@@ -16,6 +16,21 @@ a HAS_CONDITION relationship to a Condition node (condition_name
 property), lab values are properties directly on the Patient node
 (latest_sbp/latest_bmi/latest_glucose/latest_hba1c, whichever the
 question's lab field names).
+
+q1 is a special case, and writes two entries instead of one. RAG's
+top_k=25 ceiling means q1's true matching population (99 patients) can
+never be RAG's actual search result - the normal search -> verify -> count
+pipeline below can only ever produce a capped, 25-patient answer for q1,
+never the true one. So q1 gets both: "q1_expected_capped" holds exactly
+that normal pipeline's result (what the real agent can actually achieve
+today, scored against in run_eval.py's _check_answer_accuracy()), and
+"q1" holds the true, full population instead - found by
+_query_full_population(), a second, independently-written Cypher query
+that enumerates every matching patient directly with no RAG involved and
+no top_k limit at all, the same way this script never imports
+graph_tool.py for its verification/count queries. "q1" is kept only as a
+documented reference point (see docs/spec.md's Important honesty point) -
+nothing scores against it.
 """
 import json
 import os
@@ -67,6 +82,18 @@ DRUG_COUNT_QUERY = """
 MATCH (p:Patient)-[:PRESCRIBED]->(d:Drug)
 WHERE p.person_id IN $person_ids
 RETURN d.drug_name AS drug, count(DISTINCT p) AS patient_count
+"""
+
+# q1's true-population query (see module docstring): the same real-world
+# facts VERIFY_PATIENTS_QUERY_TEMPLATE checks, just enumerated directly
+# with no candidate list to narrow against - VERIFY_PATIENTS_QUERY_TEMPLATE
+# with its "AND p.person_id IN $person_ids" line dropped entirely, since
+# the whole point here is finding every matching patient, not narrowing
+# one down.
+FULL_POPULATION_QUERY_TEMPLATE = """
+MATCH (p:Patient)-[:HAS_CONDITION]->(c:Condition {{condition_name: $condition}})
+WHERE p.{lab_property} IS NOT NULL AND p.{lab_property} {op} $value
+RETURN collect(DISTINCT p.person_id) AS matched_ids
 """
 
 
@@ -123,32 +150,77 @@ def _count_drugs(driver, person_ids: list[int]) -> dict:
     return {"drug_counts": drug_counts, "patients_checked": len(person_ids)}
 
 
+def _query_full_population(driver, question: QuestionInput) -> list[int]:
+    """Every patient genuinely matching condition/lab/comparison/value -
+    no RAG, no top_k, no candidate list to narrow (see module docstring's
+    q1 special case). Sorted ascending by person_id for a stable, readable
+    answer_key.json - unlike rag_patient_ids elsewhere in this file, this
+    list isn't RAG output, so RAG's own best-score-first ordering rule
+    doesn't apply to it.
+    """
+    lab_property = _LAB_PROPERTY[question.lab]
+    op = _COMPARISON_OP[question.comparison]
+    query = FULL_POPULATION_QUERY_TEMPLATE.format(lab_property=lab_property, op=op)
+    with driver.session(database=NEO4J_DATABASE) as session:
+        row = session.run(query, condition=question.condition, value=question.value).single()
+    return sorted(row["matched_ids"])
+
+
+def _build_capped_entry(driver, question: QuestionInput, search_fn) -> dict:
+    """The normal search -> verify -> count pipeline's result, in the
+    answer_key.json entry shape - what every question except q1's "q1"
+    entry writes today, and what q1 writes to "q1_expected_capped"."""
+    patient_ids = search_fn(question)
+    verified_ids = _verify_patients(driver, question, patient_ids)
+    graph_result = _count_drugs(driver, verified_ids)
+    return {
+        "rag_patient_ids": patient_ids,
+        "graph_result": graph_result["drug_counts"],
+        "patients_checked": graph_result["patients_checked"],
+        "confidence": compute_confidence(graph_result["patients_checked"]),
+    }
+
+
+def build_answer_key(tasks: list[dict], driver, search_fn=_search) -> dict:
+    """Builds the full answer_key dict for the given tasks (see module
+    docstring's q1 special case for why q1 writes two entries instead of
+    one). search_fn is injectable - defaults to the real _search() - so
+    tests can exercise this without a live search service.
+    """
+    answer_key = {}
+    for task in tasks:
+        if not task["answerable"]:
+            continue
+        question = QuestionInput(
+            condition=task["condition"],
+            lab=task["lab"],
+            comparison=task["comparison"],
+            value=task["value"],
+            drug_a=task["drug_a"],
+            drug_b=task["drug_b"],
+        )
+        capped_entry = _build_capped_entry(driver, question, search_fn)
+        if task["id"] == "q1":
+            answer_key["q1_expected_capped"] = capped_entry
+            full_population_ids = _query_full_population(driver, question)
+            full_graph_result = _count_drugs(driver, full_population_ids)
+            answer_key["q1"] = {
+                "rag_patient_ids": full_population_ids,
+                "graph_result": full_graph_result["drug_counts"],
+                "patients_checked": full_graph_result["patients_checked"],
+                "confidence": compute_confidence(full_graph_result["patients_checked"]),
+            }
+        else:
+            answer_key[task["id"]] = capped_entry
+    return answer_key
+
+
 def main() -> None:
     tasks = json.loads(TASKS_PATH.read_text())
-    answer_key = {}
 
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)) as driver:
         driver.verify_connectivity()
-        for task in tasks:
-            if not task["answerable"]:
-                continue
-            question = QuestionInput(
-                condition=task["condition"],
-                lab=task["lab"],
-                comparison=task["comparison"],
-                value=task["value"],
-                drug_a=task["drug_a"],
-                drug_b=task["drug_b"],
-            )
-            patient_ids = _search(question)
-            verified_ids = _verify_patients(driver, question, patient_ids)
-            graph_result = _count_drugs(driver, verified_ids)
-            answer_key[task["id"]] = {
-                "rag_patient_ids": patient_ids,
-                "graph_result": graph_result["drug_counts"],
-                "patients_checked": graph_result["patients_checked"],
-                "confidence": compute_confidence(graph_result["patients_checked"]),
-            }
+        answer_key = build_answer_key(tasks, driver)
 
     ANSWER_KEY_PATH.write_text(json.dumps(answer_key, indent=2) + "\n")
     print(f"Wrote {len(answer_key)} golden answers to {ANSWER_KEY_PATH}")
