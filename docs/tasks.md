@@ -447,3 +447,141 @@ instead of reaching into this folder's directory layout directly.
 - [x] Ran the full test suite after the rename — all green before
       committing
 - [x] Commit, push, open PR (base `main`)
+
+## Phase 11 — Expose cost (`phase-11-expose-cost`, base: `phase-10-packaging`)
+
+- [x] `run_agent()` (`block5_agent/agent.py`) now returns a 3-tuple
+      `(answer, count_step_ran, cost_info)` instead of 2 — `cost_info` is
+      `{"cost_usd", "input_tokens", "output_tokens"}`, taken directly from
+      the same log entry `log_run()` already writes to
+      `data/logs/runs.jsonl`, not recomputed a second way. Reads `0`/`$0`
+      when `USE_STUB_ANSWER_FN` stubbed the answer step, since no real
+      Claude call happened (commit `0df7ad3`)
+- [x] Updated every call site to unpack 3 values: `block5_agent/run_eval.py`,
+      `block5_agent/run_all.py` (prints `cost_info` after the smoke-test
+      question), and all 5 `run_agent(...)` call sites in
+      `tests/test_agent_answers.py`
+- [x] Added a shape/type assertion on `cost_info` to the full-success test
+      in `tests/test_agent_answers.py` — confirms the three keys are
+      present and each a non-negative `int`/`float`
+- [x] Documented the new return value in `docs/spec.md`'s Tracing and
+      logging section
+- [x] `python -m pytest` — 24 passed, 1 skipped (pre-existing integration
+      skip)
+- [x] Commit, push, open PR (base `phase-10-packaging`) — PR #12,
+      reviewed and approved by leoneperdigao, CI green, merged into `main`
+      via `d99e0c6`
+
+## Phase 12 — Fix q1 seed (`phase-12-fix-q1-seed`, base: `main`)
+
+- [x] `data/eval/ci_graph_seed.cypher`'s q1 population (Essential
+      hypertension, SBP > 140) corrected from the exact 25 patients RAG's
+      own `top_k=25` search returns (a seed too small to ever disagree
+      with the agent's necessarily-capped output) to the true, exhaustive
+      99-patient population, sourced from Block 4's real
+      `data/raw/graph_export.jsonl`. Removed 10 leftover `PRESCRIBED`
+      edges from the original 25's arbitrary synthetic drug assignment
+      that didn't match real per-patient data. Independently verified by
+      direct Neo4j count against the corrected seed, loaded into an
+      ephemeral instance: 99 total, Lisinopril 49, Amlodipine 28,
+      Hydrochlorothiazide 11. Updated `data/eval/answer_key.json`'s q1
+      entry to these true counts, regenerated `docs/eval_results.md`
+      (10/11, q1 FAILing on answer accuracy by design), updated
+      `docs/spec.md`'s Known limitations (commit `9e450fd`)
+- [x] Leone's review on PR #13: agreed with the diagnosis — seeding q1
+      with exactly the 25 patients RAG returns had made the accuracy
+      check tautological, structurally incapable of ever catching the
+      retrieval-ceiling gap Block 6 exists to fix — but disagreed with
+      scoring q1 against the full 99-patient population as a permanent,
+      by-design failure
+- [x] Fix, in response: added `data/eval/answer_key.json`'s
+      `q1_expected_capped` entry — the same 25 patient IDs RAG's real
+      search returns for q1, with drug counts and confidence
+      independently verified against the corrected seed via a second
+      ephemeral Neo4j check (Amlodipine 8, Lisinopril 10,
+      Hydrochlorothiazide 11, 25 patients checked). `block5_agent/run_eval.py`'s
+      `_check_answer_accuracy()` now special-cases q1 to score against
+      this capped entry instead of the full-population entry — every
+      other question's scoring is unchanged. Re-ran the eval — 11/11
+      (1.000), `docs/eval_results.md` regenerated. Reworded
+      `docs/spec.md`'s Known limitations note from "7 of 8, not 8 of 8"
+      to describe q1 as scored against its known 25-of-99 cap, not full
+      recall (commit `fbaeb70`)
+- [x] Commit, push
+
+**PR #13 status: open, not merged.** `fbaeb70` was pushed to update it
+after Leone's review comment; CI is green, but it is still awaiting
+Leone's approval as of this writing — do not treat this phase as complete
+until #13 actually merges.
+
+## Phase 13 — Fix build_eval_answer_key.py (`phase-13-fix-build-eval-answer-key`, base: `phase-12-fix-q1-seed`)
+
+- [x] Bug found: `build_eval_answer_key.py` had no idea
+      `q1_expected_capped` existed — it was added to `answer_key.json` by
+      hand in Phase 12. Re-running the script would have silently
+      overwritten q1's true 99-patient population with the capped result
+      and never touched `q1_expected_capped` at all, since its per-task
+      loop can only ever produce the capped, 25-patient answer (search →
+      verify → count)
+- [x] Added `_query_full_population()` — an independently-written,
+      unbounded Cypher query (`VERIFY_PATIENTS_QUERY_TEMPLATE`'s shape
+      with the `person_ids IN` candidate-list check dropped entirely,
+      same idea as Block 6's `FULL_COHORT_QUERY_TEMPLATE` in
+      `genai-block6-multiagent/scripts/cohort_tool.py`, not imported
+      across blocks). Refactored `main()`'s loop into a testable
+      `build_answer_key(tasks, driver, search_fn=_search)` that
+      special-cases q1: writes the normal pipeline's result to
+      `q1_expected_capped`, and the unbounded query's result (drug counts
+      via `_count_drugs()`, confidence via `compute_confidence()`, same
+      as everywhere else) to `q1`. Every other task's behavior unchanged.
+      Updated the module docstring to explain the special case (commit
+      `835f84b`)
+- [x] Added `tests/test_build_eval_answer_key.py` — zero prior coverage on
+      this file. Fake/injected-driver tests confirming `q1` and
+      `q1_expected_capped` are both written, from genuinely independent
+      query paths, and that every other task still writes directly to
+      its own entry (commit `835f84b`)
+- [x] Added `tests/test_run_eval.py` — zero prior coverage on
+      `_check_answer_accuracy()` too. Confirms it reads
+      `q1_expected_capped` for q1, not q1's full-population entry —
+      verified by temporarily reverting the special case and confirming
+      two of the four tests failed for the expected reason, before
+      restoring it, so this isn't just asserting today's happy path
+      (commit `f5b8206`)
+- [x] Ran the fixed script against real services — an ephemeral Neo4j
+      loaded with the corrected 99-patient seed, plus Block 4's real RAG
+      API (`uvicorn scripts.api:app`, its own venv/credentials) — and
+      regenerated `data/eval/answer_key.json`. `q1_expected_capped` and
+      q2-q8 came back byte-identical to what was already committed; q1's
+      counts (99 patients, Lisinopril 49/Amlodipine 28/Hydrochlorothiazide
+      11) matched exactly too. The one real change: q1's
+      `rag_patient_ids` now correctly holds all 99 true-population IDs
+      instead of a stale 25-ID list left over from Phase 12 that never
+      matched its own `patients_checked: 99`. Hand-written `note` fields
+      are gone now that the script is the source of truth again (commit
+      `5045087`)
+- [x] Re-ran `USE_RAG_FIXTURES=1 USE_STUB_ANSWER_FN=1 python -m
+      block5_agent.run_eval` — still 11/11 (1.000), `docs/eval_results.md`
+      unchanged
+- [x] Updated `docs/spec.md`'s Known limitations to say both q1 entries
+      are produced automatically every time the script runs, not
+      hand-typed or hand-verified once (commit `8bfc009`)
+- [x] Commit, push, open PR (base `phase-12-fix-q1-seed`) — PR #14,
+      noting in the body that it's stacked on and depends on #13
+- [x] CI gap found and fixed: `tests/test_build_eval_answer_key.py` was
+      the first test in this suite to ever import
+      `block5_agent/build_eval_answer_key.py`, which reads
+      `NEO4J_URI`/`NEO4J_USER`/`NEO4J_PASSWORD` from the environment at
+      import time with no default (unlike `graph_tool.py`'s
+      `.get(..., default)`). Masked locally by the module's own
+      `load_dotenv()` picking up `.env`; CI's "Run tests" step never set
+      these, so the whole suite failed to collect (`KeyError:
+      'NEO4J_URI'`) on PR #14's first run. Added the same `NEO4J_*` env
+      block the "Load CI graph seed" and "Run evaluation" steps already
+      use to `.github/workflows/ci.yml`'s "Run tests" step — no service
+      change needed, since these tests fake the driver (commit `7e6037f`)
+- [x] Confirmed CI green on both PR #13 and PR #14 after the fix
+
+**PR #14 status: open, not merged, stacked on and blocked by #13** — do
+not treat this phase as complete until #14 actually merges (and #13
+merges first).
