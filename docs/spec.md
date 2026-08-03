@@ -674,18 +674,24 @@ Not part of this block:
   point): the golden answer and the agent's necessarily-capped output
   could never disagree, no matter how large the true population really
   was. The seed has since been corrected to carry the true, exhaustive
-  99-patient population, independently verified by direct Neo4j count
-  against the seed once loaded, not assumed (99 total, Lisinopril 49,
-  Amlodipine 28, Hydrochlorothiazide 11 — see `data/eval/answer_key.json`'s
-  q1 entry). RAG's own capped search still returns only 25 of those 99, so
+  99-patient population (99 total, Lisinopril 49, Amlodipine 28,
+  Hydrochlorothiazide 11 — see `data/eval/answer_key.json`'s q1 entry).
+  RAG's own capped search still returns only 25 of those 99, so
   `run_eval.py`'s `_check_answer_accuracy()` scores q1 against a second
   entry, `q1_expected_capped` — the known-achievable answer over the same
-  25 patients RAG's real search actually returns, also independently
-  verified against the corrected 99-patient seed (Amlodipine 8, Lisinopril
+  25 patients RAG's real search actually returns (Amlodipine 8, Lisinopril
   10, Hydrochlorothiazide 11 across 25 verified patients) — instead of
   q1's own entry, which stays the true, full 99-patient population for
-  reference. **q1 is scored against its known 25-of-99 cap, not full
-  recall**: the evaluation's pass rate is genuinely 11/11 (see
+  reference. Both entries are produced automatically, every time
+  `block5_agent/build_eval_answer_key.py` runs, not hand-typed or
+  hand-verified once: its q1 special case writes `q1_expected_capped` from
+  the same search → verify → count pipeline every other question uses,
+  and writes `q1` from a second, independently-written, unbounded Cypher
+  query (`_query_full_population()`) that enumerates every matching
+  patient directly against the live graph, with no RAG search and no
+  `top_k` involved at all — so re-running the script can't silently drop
+  or overwrite either entry. **q1 is scored against its known 25-of-99
+  cap, not full recall**: the evaluation's pass rate is genuinely 11/11 (see
   `docs/eval_results.md`), but that pass reflects the agent correctly
   reproducing the achievable, capped answer, not evidence it recovered the
   true population — the recall gap described above is real and unchanged,
