@@ -666,6 +666,30 @@ Not part of this block:
 - The evaluation's "correct" counts depend on whatever the search service
   currently returns. If that service's behavior changes later, the
   correct answers may need to be recalculated.
+- `data/eval/ci_graph_seed.cypher`'s q1 population (Essential hypertension,
+  SBP > 140) was originally seeded with only the exact 25 patients RAG's
+  own `top_k=25` search returns — correct at the time (Phase 4's
+  25-patients-checked verification really did match 25 = 25), but too
+  small to ever expose the gap described above (see Important honesty
+  point): the golden answer and the agent's necessarily-capped output
+  could never disagree, no matter how large the true population really
+  was. The seed has since been corrected to carry the true, exhaustive
+  99-patient population, independently verified by direct Neo4j count
+  against the seed once loaded, not assumed (99 total, Lisinopril 49,
+  Amlodipine 28, Hydrochlorothiazide 11 — see `data/eval/answer_key.json`'s
+  q1 entry). RAG's own capped search still returns only 25 of those 99, so
+  `run_eval.py`'s `_check_answer_accuracy()` scores q1 against a second
+  entry, `q1_expected_capped` — the known-achievable answer over the same
+  25 patients RAG's real search actually returns, also independently
+  verified against the corrected 99-patient seed (Amlodipine 8, Lisinopril
+  10, Hydrochlorothiazide 11 across 25 verified patients) — instead of
+  q1's own entry, which stays the true, full 99-patient population for
+  reference. **q1 is scored against its known 25-of-99 cap, not full
+  recall**: the evaluation's pass rate is genuinely 11/11 (see
+  `docs/eval_results.md`), but that pass reflects the agent correctly
+  reproducing the achievable, capped answer, not evidence it recovered the
+  true population — the recall gap described above is real and unchanged,
+  just no longer disguised as, or confused with, an eval failure.
 - Only the full-success case's `answer` is freely written, by the
   language model, describing the real counts. Nothing automatically
   checks that this write-up is worded accurately — the evaluation checks

@@ -28,12 +28,50 @@
       8695
     ],
     "graph_result": {
+      "Amlodipine": 28,
+      "Lisinopril": 49,
+      "Hydrochlorothiazide": 11
+    },
+    "patients_checked": 99,
+    "confidence": "high",
+    "note": "The original Phase 4 verification (25 patients checked, 25 = 25) was correct for the seed as it existed then - at the time, the CI seed only carried the exact 25 patients RAG's own top_k=25 search returned, so the golden answer and the agent's capped output could never disagree. That seed was later found too small to expose the real gap between what RAG can return and the true matching population. This is the corrected, fully-representative version: data/eval/ci_graph_seed.cypher now carries the true, exhaustive 99-patient population (Essential hypertension, SBP > 140), sourced directly from Block 4's data/raw/graph_export.jsonl and independently verified by direct Neo4j count against this seed once loaded, not assumed - 99 total, Lisinopril 49, Amlodipine 28, Hydrochlorothiazide 11. RAG's own capped search still returns only 25 of those 99 (rag_fixtures.json unchanged, a real recording against the full Pinecone index), and the 25 it does return happen to genuinely verify with a real graph_result of {\"Amlodipine\": 8, \"Lisinopril\": 10, \"Hydrochlorothiazide\": 11} - a real number, unchanged from before, since that aggregate was already accurate for those exact 25 patients. So this question is expected to fail Block 5's own accuracy check permanently - see docs/eval_results.md."
+  },
+  "q1_expected_capped": {
+    "rag_patient_ids": [
+      7253,
+      8737,
+      6700,
+      4191,
+      11015,
+      7459,
+      8139,
+      11504,
+      3134,
+      18,
+      5599,
+      2132,
+      6883,
+      11258,
+      7371,
+      11171,
+      2677,
+      3691,
+      5915,
+      2003,
+      11459,
+      7685,
+      10279,
+      2268,
+      8695
+    ],
+    "graph_result": {
       "Amlodipine": 8,
       "Lisinopril": 10,
       "Hydrochlorothiazide": 11
     },
     "patients_checked": 25,
-    "confidence": "high"
+    "confidence": "high",
+    "note": "This is what q1 can actually achieve today, not the true 99-patient population above - RAG's top_k=25 ceiling means Tool 1 can never return more than 25 of q1's true 99 matching patients (see docs/spec.md's Important honesty point), so this is the correct, capped golden answer to score the real agent's real output against. Same 25 patient IDs as rag_fixtures.json's q1 entry, verified against the corrected 99-patient seed (data/eval/ci_graph_seed.cypher) by an ephemeral Neo4j instance: all 25 pass condition/SBP verification (patients_checked: 25), and the drug counts among exactly those 25 are Amlodipine 8, Lisinopril 10, Hydrochlorothiazide 11 - the same real numbers already recorded in q1's own note above, independently re-confirmed here rather than assumed. See block5_agent/run_eval.py's _check_answer_accuracy() for how this entry is used instead of q1's full-population entry when scoring q1."
   },
   "q2": {
     "rag_patient_ids": [
