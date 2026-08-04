@@ -18,11 +18,27 @@ step, same as the others, and asserts nothing about the free-text answer
 itself.
 """
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from block5_agent.agent import run_agent
 from block5_agent.graph_tool import GraphServiceError
 from block5_agent.rag_tool import RAGServiceError
 from block5_agent.schemas import QuestionInput, assemble_question_text
+
+
+class _OneIntField(BaseModel):
+    x: int
+
+
+def _make_validation_error() -> ValidationError:
+    """A real pydantic ValidationError - classify_exception's
+    "validation_error" kind (see block5_agent/error_classification.py),
+    used here to exercise the answer step's permanent-failure path."""
+    try:
+        _OneIntField(x="not an int")
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("expected a ValidationError")
 
 QUESTION = QuestionInput(
     condition="hypertension",
@@ -115,7 +131,34 @@ def test_search_step_broken_after_retries_returns_fixed_error_answer():
     assert answer.outcome == "tool_error"
 
 
+def test_search_step_retries_back_off_between_attempts_but_not_after_the_last_one():
+    # A short, real backoff between retries - recorded via a fake sleep_fn
+    # rather than actually waiting, so this test stays fast while still
+    # proving the delay values themselves are correct (see docs/spec.md's
+    # Agent steps, matching Block 6 Phase 8's confirmed 0.5s-scaled formula).
+    recorded_delays = []
+    search_fn = _CountingFake(_always_raise(RAGServiceError("connection_error")))
+    count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
+
+    run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        sleep_fn=lambda seconds: recorded_delays.append(seconds),
+    )
+
+    # 3 attempts total, so 2 backoff delays between them - none after the
+    # final, exhausted attempt (nothing left to wait for).
+    assert recorded_delays == [0.5, 1.0]
+    assert search_fn.call_count == 3
+
+
 def test_graph_step_broken_after_retries_returns_degraded_answer():
+    # recorded_delays proves the same backoff (0.5s, 1.0s - see docs/spec.md's
+    # Agent steps) applies to the count step's retry loop, not just search's -
+    # a fake sleep_fn is injected rather than actually waiting, so this test
+    # stays fast while still proving the delay values themselves are correct.
+    recorded_delays = []
     search_fn = _CountingFake(
         lambda query_text, condition, lab, comparison, value, top_k=25: {
             "answer": "some patients matched",
@@ -130,11 +173,19 @@ def test_graph_step_broken_after_retries_returns_degraded_answer():
     )
     count_fn = _CountingFake(_always_raise(GraphServiceError("ServiceUnavailable")))
 
-    answer, count_step_ran, cost_info = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
+    answer, count_step_ran, cost_info = run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        sleep_fn=lambda seconds: recorded_delays.append(seconds),
+    )
 
     assert search_fn.call_count == 1
     # 2 retries => 3 attempts total, per docs/spec.md's Agent steps section.
     assert count_fn.call_count == 3
+    # 3 attempts total, so 2 backoff delays between them - none after the
+    # final, exhausted attempt (nothing left to wait for).
+    assert recorded_delays == [0.5, 1.0]
     # The count step was attempted (and failed), not skipped - it "ran".
     assert count_step_ran is True
     assert answer.question == assemble_question_text(QUESTION)
@@ -176,7 +227,10 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
             "patients_checked": 3,
         }
     )
-    answer_fn = _CountingFake(_always_raise(ValueError("unparseable model output")))
+    # ConnectionError classifies as "connection_error" (see
+    # block5_agent/error_classification.py) - one of the two retryable
+    # kinds, so this exercises the real retry-then-give-up path.
+    answer_fn = _CountingFake(_always_raise(ConnectionError("connection reset")))
 
     answer, count_step_ran, cost_info = run_agent(
         QUESTION, search_fn=search_fn, count_fn=count_fn, answer_fn=answer_fn
@@ -208,6 +262,95 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
         "sentence is missing."
     )
     assert answer.outcome == "tool_error"
+
+
+def test_answer_step_permanent_failure_fails_immediately_without_retrying():
+    # A pydantic ValidationError classifies as "validation_error" (see
+    # block5_agent/error_classification.py), a permanent failure per
+    # docs/spec.md's Agent steps - retrying identical bad input can't fix
+    # it, so this must not consume the answer step's retry budget or sleep.
+    search_fn = _CountingFake(
+        lambda query_text, condition, lab, comparison, value, top_k=25: {
+            "answer": "some patients matched",
+            "patient_ids": [1, 2, 3],
+            "citations": [
+                {"patient_id": 1, "chunk_id": "1_chunk0", "snippet": "Patient 1 text."},
+                {"patient_id": 2, "chunk_id": "2_chunk0", "snippet": "Patient 2 text."},
+                {"patient_id": 3, "chunk_id": "3_chunk0", "snippet": "Patient 3 text."},
+            ],
+            "retrieved_count": 3,
+        }
+    )
+    count_fn = _CountingFake(
+        lambda patient_ids, condition, lab, comparison, value: {
+            "drug_counts": {"Lisinopril": 2},
+            "patients_checked": 3,
+        }
+    )
+    answer_fn = _CountingFake(_always_raise(_make_validation_error()))
+    recorded_delays = []
+
+    answer, count_step_ran, cost_info = run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        answer_fn=answer_fn,
+        sleep_fn=lambda seconds: recorded_delays.append(seconds),
+    )
+
+    assert answer_fn.call_count == 1
+    assert recorded_delays == []
+    assert answer.outcome == "tool_error"
+    assert answer.caveat == (
+        "The final write-up step failed, even after retrying once. The "
+        "patient list and drug counts above are accurate; only the summary "
+        "sentence is missing."
+    )
+
+
+def test_answer_step_unclassified_failure_fails_immediately_without_retrying():
+    # A plain ValueError classifies as "unknown" (see
+    # block5_agent/error_classification.py) - not in the answer step's
+    # retryable allow-list ({"timeout", "connection_error"}, matching
+    # Block 6 Phase 8's cohort_tool.py), so this must not consume the
+    # answer step's retry budget or sleep either, same as a validation_error.
+    search_fn = _CountingFake(
+        lambda query_text, condition, lab, comparison, value, top_k=25: {
+            "answer": "some patients matched",
+            "patient_ids": [1, 2, 3],
+            "citations": [
+                {"patient_id": 1, "chunk_id": "1_chunk0", "snippet": "Patient 1 text."},
+                {"patient_id": 2, "chunk_id": "2_chunk0", "snippet": "Patient 2 text."},
+                {"patient_id": 3, "chunk_id": "3_chunk0", "snippet": "Patient 3 text."},
+            ],
+            "retrieved_count": 3,
+        }
+    )
+    count_fn = _CountingFake(
+        lambda patient_ids, condition, lab, comparison, value: {
+            "drug_counts": {"Lisinopril": 2},
+            "patients_checked": 3,
+        }
+    )
+    answer_fn = _CountingFake(_always_raise(ValueError("unparseable model output")))
+    recorded_delays = []
+
+    answer, count_step_ran, cost_info = run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        answer_fn=answer_fn,
+        sleep_fn=lambda seconds: recorded_delays.append(seconds),
+    )
+
+    assert answer_fn.call_count == 1
+    assert recorded_delays == []
+    assert answer.outcome == "tool_error"
+    assert answer.caveat == (
+        "The final write-up step failed, even after retrying once. The "
+        "patient list and drug counts above are accurate; only the summary "
+        "sentence is missing."
+    )
 
 
 def test_full_success_threads_rag_citations_alongside_patient_ids():

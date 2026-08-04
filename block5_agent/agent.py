@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from langgraph.graph import END, StateGraph
 from langsmith.wrappers import wrap_anthropic
 
+from block5_agent.error_classification import classify_exception
 from block5_agent.graph_tool import GraphServiceError, count_drugs
 from block5_agent.logging_utils import log_run
 from block5_agent.rag_tool import RAGServiceError, search_patients
@@ -35,6 +36,20 @@ _MAX_TOOL_RETRIES = 2
 # tool budget since a retry here is a second, slower, more expensive
 # language-model call (see docs/spec.md's Agent steps).
 _MAX_ANSWER_RETRIES = 1
+
+# Backoff between retry attempts, in seconds - matches Block 6 Phase 8's
+# confirmed formula (genai-block6-multiagent/scripts/cohort_agent.py):
+# _RETRY_BACKOFF_SECONDS * attempt_number, so a 3-attempt loop waits 0.5s
+# then 1.0s (see docs/spec.md's Agent steps).
+_RETRY_BACKOFF_SECONDS = 0.5
+
+# classify_exception kinds worth retrying for the answer-writing step - a
+# real infra hiccup (timeout/connection_error) might clear up on a second
+# attempt, but "validation_error"/"unknown" mean either bad input or a
+# genuine bug, so retrying just delays the same failure. Matches Block 6
+# Phase 8's confirmed allow-list (genai-block6-multiagent/scripts/
+# cohort_tool.py's _RETRYABLE_ERROR_KINDS), see docs/spec.md's Agent steps.
+_RETRYABLE_ANSWER_ERROR_KINDS = {"timeout", "connection_error"}
 
 _ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
@@ -89,6 +104,7 @@ def run_agent(
     search_fn=search_patients,
     count_fn=count_drugs,
     answer_fn=_default_answer_fn,
+    sleep_fn=time.sleep,
 ) -> tuple[ClinicalAnswer, bool, dict]:
     """Run one clinical question through the agent.
 
@@ -100,7 +116,9 @@ def run_agent(
     "input_tokens", "output_tokens"} - taken from the same log entry
     written to data/logs/runs.jsonl. It reads 0 tokens/$0 when
     USE_STUB_ANSWER_FN stubbed the answer step, since no real Claude call
-    happened for that part.
+    happened for that part. sleep_fn is injectable (defaults to the real
+    time.sleep) so tests can pass a no-op fake instead of actually waiting
+    out the retry backoff (see docs/spec.md's Agent steps).
     """
     node_latency_ms: dict[str, float] = {}
     token_usage = {"input_tokens": 0, "output_tokens": 0}
@@ -138,6 +156,7 @@ def run_agent(
     def route_after_search(state: AgentState) -> str:
         if state.get("rag_error"):
             if state["rag_error_retryable"] and state["rag_retry_count"] < _MAX_TOOL_RETRIES + 1:
+                sleep_fn(_RETRY_BACKOFF_SECONDS * state["rag_retry_count"])
                 return "search"
             return "build_search_error_answer"
         if state["rag_result"]["retrieved_count"] == 0:
@@ -178,6 +197,7 @@ def run_agent(
     def route_after_count(state: AgentState) -> str:
         if state.get("graph_error"):
             if state["graph_error_retryable"] and state["graph_retry_count"] < _MAX_TOOL_RETRIES + 1:
+                sleep_fn(_RETRY_BACKOFF_SECONDS * state["graph_retry_count"])
                 return "count"
             return "build_graph_error_answer"
         return "synthesize"
@@ -193,8 +213,10 @@ def run_agent(
                 question_input, state["rag_patient_ids"], drug_a_count, drug_b_count
             )
         except Exception as exc:
+            error_kind = classify_exception(exc)
             return {
                 "answer_error": str(exc),
+                "answer_error_retryable": error_kind in _RETRYABLE_ANSWER_ERROR_KINDS,
                 "answer_retry_count": state["answer_retry_count"] + 1,
             }
 
@@ -229,7 +251,11 @@ def run_agent(
 
     def route_after_synthesize(state: AgentState) -> str:
         if state.get("answer_error"):
-            if state["answer_retry_count"] < _MAX_ANSWER_RETRIES + 1:
+            if (
+                state["answer_error_retryable"]
+                and state["answer_retry_count"] < _MAX_ANSWER_RETRIES + 1
+            ):
+                sleep_fn(_RETRY_BACKOFF_SECONDS * state["answer_retry_count"])
                 return "synthesize"
             return "build_answer_error_answer"
         return "done"
@@ -375,6 +401,7 @@ def run_agent(
         "graph_error_retryable": True,
         "graph_retry_count": 0,
         "answer_error": None,
+        "answer_error_retryable": True,
         "answer_retry_count": 0,
         "final_answer": None,
         "count_step_ran": False,
