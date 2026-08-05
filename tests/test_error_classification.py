@@ -76,6 +76,15 @@ def test_anthropic_api_timeout_error_classifies_as_timeout():
     assert classify_exception(_make_anthropic_timeout_error()) == "timeout"
 
 
+def test_anthropic_api_connection_error_classifies_as_connection_error():
+    # Unlike the status-code-based errors above, APIConnectionError has no
+    # status code at all - it's raised when the request never reached the
+    # server (or the connection dropped mid-request), so it's built from
+    # just a request, no response/body.
+    exc = anthropic.APIConnectionError(request=_make_anthropic_request())
+    assert classify_exception(exc) == "connection_error"
+
+
 def test_anthropic_rate_limit_error_classifies_as_timeout():
     # A 429 - the connection succeeded, the server just wants a slower
     # pace. Waiting out the same backoff a real timeout gets is the

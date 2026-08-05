@@ -55,6 +55,17 @@ def classify_exception(exc: Exception) -> str:
     if isinstance(exc, anthropic.APITimeoutError):
         return "timeout"
 
+    # Any other Anthropic connection-level failure (request never reached
+    # the server, connection dropped mid-request, etc.) - checked right
+    # after APITimeoutError since that's a narrower subclass of this same
+    # class and must keep matching "timeout" first; order relative to the
+    # RateLimitError/InternalServerError checks below doesn't matter,
+    # since none of these four subclass each other. This was one of the
+    # four Anthropic exception types review feedback named as a gap,
+    # closed directly here.
+    if isinstance(exc, anthropic.APIConnectionError):
+        return "connection_error"
+
     # A 429 rate-limit response - the connection and request both
     # succeeded, the server is just asking to slow down. Waiting out this
     # step's backoff before retrying is exactly the right response, same
