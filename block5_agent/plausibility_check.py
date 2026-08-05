@@ -40,8 +40,16 @@ question's ability to get answered at all, for a check that was only ever
 advisory. That tradeoff is wrong for an advisory check, so this fails
 open and simply says so.
 """
-from block5_agent.graph_tool import NEO4J_DATABASE, _LAB_PROPERTY, _get_driver
+from neo4j import Query
 
+from block5_agent.graph_tool import GRAPH_QUERY_TIMEOUT, NEO4J_DATABASE, _LAB_PROPERTY, _get_driver
+
+# Deliberately no LIMIT on either query below: this check needs the
+# *complete* distinct vocabulary to compare against, not a sample of it -
+# a LIMIT would make a legitimate condition/drug past the cutoff look
+# unrecognized, producing a false-positive flag for real, valid data. That
+# defeats the point of the check, so this isn't an oversight to "fix"
+# later by adding one.
 _DISTINCT_CONDITION_NAMES_QUERY = """
 MATCH (c:Condition)
 RETURN DISTINCT c.condition_name AS condition_name
@@ -59,12 +67,22 @@ def _fetch_known_vocabulary(*, driver=None) -> dict:
     """Query the graph for its real, current Condition.condition_name and
     Drug.drug_name values. Labs are not queried here - they're checked
     directly against graph_tool.py's own _LAB_PROPERTY whitelist (see
-    module docstring), not a separate graph query."""
+    module docstring), not a separate graph query.
+
+    Both queries are wrapped in a Query(..., timeout=GRAPH_QUERY_TIMEOUT)
+    the same way graph_tool.py's own queries are (imported straight from
+    there - same value, same reasoning, no need for a second constant
+    that could drift from it) - without this, an unresponsive Neo4j
+    instance would hang this call indefinitely instead of failing fast
+    into check_plausibility's fail-open handling (see module docstring).
+    """
     driver = driver if driver is not None else _get_driver()
     with driver.session(database=NEO4J_DATABASE) as session:
-        condition_rows = session.run(_DISTINCT_CONDITION_NAMES_QUERY)
+        condition_rows = session.run(
+            Query(_DISTINCT_CONDITION_NAMES_QUERY, timeout=GRAPH_QUERY_TIMEOUT)
+        )
         conditions = {row["condition_name"] for row in condition_rows}
-        drug_rows = session.run(_DISTINCT_DRUG_NAMES_QUERY)
+        drug_rows = session.run(Query(_DISTINCT_DRUG_NAMES_QUERY, timeout=GRAPH_QUERY_TIMEOUT))
         drugs = {row["drug_name"] for row in drug_rows}
     return {"conditions": conditions, "drugs": drugs}
 

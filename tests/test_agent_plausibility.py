@@ -12,8 +12,11 @@ side effect run_agent already produces on every call.
 """
 import json
 
+from neo4j import Query
+
 import block5_agent.plausibility_check as plausibility_check
 from block5_agent.agent import run_agent
+from block5_agent.graph_tool import GRAPH_QUERY_TIMEOUT
 from block5_agent.logging_utils import LOG_PATH
 from block5_agent.plausibility_check import check_plausibility
 from block5_agent.schemas import QuestionInput
@@ -45,7 +48,12 @@ class _FakeSession:
         self._drug_rows = drug_rows
 
     def run(self, query, **params):
-        if "condition_name" in query:
+        # Matches tests/test_plausibility_check.py's own assertions: the
+        # real driver has no timeout kwarg on run() - a bounded query must
+        # arrive wrapped in a Query object carrying the timeout.
+        assert isinstance(query, Query), "query must be wrapped in neo4j.Query"
+        assert query.timeout == GRAPH_QUERY_TIMEOUT
+        if "condition_name" in query.text:
             return _FakeResult(self._condition_rows)
         return _FakeResult(self._drug_rows)
 

@@ -3,11 +3,24 @@ and docs/spec.md's Agent steps). The Neo4j driver is faked throughout,
 matching tests/test_graph_tool.py's fake-driver pattern, so none of this
 needs a real graph database running.
 """
+from neo4j import Query
+from neo4j.exceptions import Neo4jError
+
 import block5_agent.plausibility_check as plausibility_check
+from block5_agent.graph_tool import GRAPH_QUERY_TIMEOUT
 from block5_agent.plausibility_check import check_plausibility
 
 _REAL_CONDITIONS = {"Essential hypertension", "Osteoporosis"}
 _REAL_DRUGS = {"Lisinopril", "Amlodipine"}
+
+
+def _make_client_error(code: str, message: str = "boom"):
+    # Neo4jError._hydrate_neo4j is the driver's own real construction path
+    # (used internally when the server returns an error) - this builds a
+    # real ClientError instance with a real .code, not a hand-rolled
+    # duck-typed fake. Matches tests/test_graph_tool.py's own helper of
+    # the same name.
+    return Neo4jError._hydrate_neo4j(code=code, message=message)
 
 
 class _FakeResult:
@@ -19,12 +32,21 @@ class _FakeResult:
 
 
 class _FakeSession:
-    def __init__(self, condition_rows, drug_rows):
+    def __init__(self, condition_rows, drug_rows, raise_exc=None):
         self._condition_rows = condition_rows
         self._drug_rows = drug_rows
+        self._raise_exc = raise_exc
 
     def run(self, query, **params):
-        if "condition_name" in query:
+        if self._raise_exc is not None:
+            raise self._raise_exc
+        # Matches tests/test_graph_tool.py's own assertions: the real
+        # driver has no timeout kwarg on run() - a bounded query must
+        # arrive wrapped in a Query object carrying the timeout, so every
+        # call this module makes is checked against that shape here.
+        assert isinstance(query, Query), "query must be wrapped in neo4j.Query"
+        assert query.timeout == GRAPH_QUERY_TIMEOUT
+        if "condition_name" in query.text:
             return _FakeResult(self._condition_rows)
         return _FakeResult(self._drug_rows)
 
@@ -36,12 +58,13 @@ class _FakeSession:
 
 
 class _FakeDriver:
-    def __init__(self, conditions, drugs):
+    def __init__(self, conditions, drugs, raise_exc=None):
         self._condition_rows = [{"condition_name": c} for c in conditions]
         self._drug_rows = [{"drug_name": d} for d in drugs]
+        self._raise_exc = raise_exc
 
     def session(self, database=None):
-        return _FakeSession(self._condition_rows, self._drug_rows)
+        return _FakeSession(self._condition_rows, self._drug_rows, self._raise_exc)
 
 
 class _RaisingDriver:
@@ -158,3 +181,32 @@ def test_vocabulary_is_cached_after_first_successful_query():
     flags = check_plausibility("Essential hypertension", "SBP", "Lisinopril", "Amlodipine")
 
     assert flags == []
+
+
+def test_a_server_side_query_timeout_fails_open_instead_of_hanging():
+    # Regression-proof pattern matching tests/test_graph_tool.py's own
+    # test_count_drugs_raises_graph_service_error_on_timeout: a real
+    # Query(timeout=...) expiring server-side surfaces as this specific
+    # ClientError code, not a bare hang. Without the Query(...,
+    # timeout=GRAPH_QUERY_TIMEOUT) wrapping added to _fetch_known_vocabulary,
+    # a slow/blocked query would hang session.run() indefinitely instead of
+    # failing fast - and _FakeSession.run()'s own isinstance/timeout
+    # assertions above would catch a regression where that wrapping is
+    # ever removed, since this fake (like every other test in this file)
+    # only returns successfully after passing those checks.
+    exc_to_raise = _make_client_error(
+        "Neo.ClientError.Transaction.TransactionTimedOut",
+        "The transaction has been terminated",
+    )
+    driver = _FakeDriver(_REAL_CONDITIONS, _REAL_DRUGS, raise_exc=exc_to_raise)
+
+    flags = check_plausibility(
+        "Essential hypertension", "SBP", "Lisinopril", "Amlodipine", driver=driver
+    )
+
+    # Fails open (see plausibility_check.py's module docstring) rather
+    # than hanging or propagating - the timeout is reported as the one
+    # flag, naming the real exception type.
+    assert len(flags) == 1
+    assert "plausibility_check_unavailable" in flags[0]
+    assert "ClientError" in flags[0]
