@@ -469,7 +469,7 @@ instead of reaching into this folder's directory layout directly.
 - [x] `python -m pytest` — 24 passed, 1 skipped (pre-existing integration
       skip)
 - [x] Commit, push, open PR (base `phase-10-packaging`) — PR #12,
-      reviewed and approved by leoneperdigao, CI green, merged into `main`
+      reviewed and approved, CI green, merged into `main`
       via `d99e0c6`
 
 ## Phase 12 — Fix q1 seed (`phase-12-fix-q1-seed`, base: `main`)
@@ -488,7 +488,7 @@ instead of reaching into this folder's directory layout directly.
       entry to these true counts, regenerated `docs/eval_results.md`
       (10/11, q1 FAILing on answer accuracy by design), updated
       `docs/spec.md`'s Known limitations (commit `9e450fd`)
-- [x] Leone's review on PR #13: agreed with the diagnosis — seeding q1
+- [x] Review feedback on PR #13: agreed with the diagnosis — seeding q1
       with exactly the 25 patients RAG returns had made the accuracy
       check tautological, structurally incapable of ever catching the
       retrieval-ceiling gap Block 6 exists to fix — but disagreed with
@@ -509,10 +509,9 @@ instead of reaching into this folder's directory layout directly.
       recall (commit `fbaeb70`)
 - [x] Commit, push
 
-**PR #13 status: open, not merged.** `fbaeb70` was pushed to update it
-after Leone's review comment; CI is green, but it is still awaiting
-Leone's approval as of this writing — do not treat this phase as complete
-until #13 actually merges.
+**PR #13 status: merged into `main` via `1dcb8c8`.** `fbaeb70` was pushed
+to update it after review feedback; CI was green, and it was approved and
+merged.
 
 ## Phase 13 — Fix build_eval_answer_key.py (`phase-13-fix-build-eval-answer-key`, base: `phase-12-fix-q1-seed`)
 
