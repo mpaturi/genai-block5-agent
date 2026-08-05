@@ -15,12 +15,34 @@ classify_exception must look for a "timeout"-indicating substring (e.g.
 """
 import asyncio
 
+import anthropic
 import httpx
 import pytest
+# Not exported at anthropic's top level (see
+# block5_agent/error_classification.py's import comment) - imported from
+# the private _exceptions submodule the same way that module does.
+from anthropic._exceptions import ServiceUnavailableError as AnthropicServiceUnavailableError
 from neo4j.exceptions import Neo4jError, ServiceUnavailable, SessionExpired, TransientError
 from pydantic import BaseModel, ValidationError
 
 from block5_agent.error_classification import classify_exception
+
+
+def _make_anthropic_request() -> httpx.Request:
+    # anthropic's own exception constructors require a real httpx.Request
+    # (some also a httpx.Response) - never actually sent, just the shape
+    # these exceptions carry.
+    return httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+
+def _make_anthropic_timeout_error() -> anthropic.APITimeoutError:
+    return anthropic.APITimeoutError(request=_make_anthropic_request())
+
+
+def _make_anthropic_status_error(error_cls, status_code: int, message: str = "boom"):
+    request = _make_anthropic_request()
+    response = httpx.Response(status_code, request=request, json={"error": {"message": message}})
+    return error_cls(message, response=response, body={"error": {"message": message}})
 
 
 class _OneIntField(BaseModel):
@@ -45,6 +67,49 @@ def _make_client_error(code: str, message: str = "boom"):
 
 def test_asyncio_timeout_error_classifies_as_timeout():
     assert classify_exception(asyncio.TimeoutError()) == "timeout"
+
+
+def test_anthropic_api_timeout_error_classifies_as_timeout():
+    # The answer-writing step's sole language-model call is to Anthropic
+    # (see agent.py's synthesize_node) - a real request timeout there must
+    # be retryable, not silently fall through to "unknown".
+    assert classify_exception(_make_anthropic_timeout_error()) == "timeout"
+
+
+def test_anthropic_rate_limit_error_classifies_as_timeout():
+    # A 429 - the connection succeeded, the server just wants a slower
+    # pace. Waiting out the same backoff a real timeout gets is the
+    # correct response, so this shares the "timeout" bucket, not
+    # "connection_error" (nothing about the connection is broken).
+    exc = _make_anthropic_status_error(anthropic.RateLimitError, 429)
+    assert classify_exception(exc) == "timeout"
+
+
+def test_anthropic_internal_server_error_classifies_as_connection_error():
+    # A generic 5xx on Anthropic's own side - a real infra problem on
+    # their end, not this agent's input.
+    exc = _make_anthropic_status_error(anthropic.InternalServerError, 500)
+    assert classify_exception(exc) == "connection_error"
+
+
+def test_anthropic_overloaded_error_classifies_as_connection_error():
+    # A 529 - Anthropic itself is overloaded, a real sibling of
+    # InternalServerError under APIStatusError, not a subclass of it (see
+    # block5_agent/error_classification.py's comment) - same
+    # "connection_error" bucket either way, since both mean the server
+    # can't handle this right now, not that this agent's connection broke.
+    exc = _make_anthropic_status_error(anthropic.OverloadedError, 529)
+    assert classify_exception(exc) == "connection_error"
+
+
+def test_anthropic_service_unavailable_error_classifies_as_connection_error():
+    # A 503 - same bucket as OverloadedError/InternalServerError above.
+    # ServiceUnavailableError isn't exported at anthropic's top level in
+    # the installed version, so it's built directly from the private
+    # _exceptions submodule here, the same way
+    # block5_agent/error_classification.py imports it.
+    exc = _make_anthropic_status_error(AnthropicServiceUnavailableError, 503)
+    assert classify_exception(exc) == "connection_error"
 
 
 def test_service_unavailable_with_timeout_message_classifies_as_timeout():
