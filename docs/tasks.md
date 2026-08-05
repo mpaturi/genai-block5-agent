@@ -447,3 +447,14 @@ instead of reaching into this folder's directory layout directly.
 - [x] Ran the full test suite after the rename — all green before
       committing
 - [x] Commit, push, open PR (base `main`)
+
+## Phase 15 — Plausibility check (`phase-15-plausibility-check`, base: `phase-14-retry-backoff-hardening`)
+
+Closes genai-block7-security's docs/spec.md LLM01 (direct injection) — corrects the original spec framing, which assumed a natural-language-parsing step Block 5 doesn't actually have: `condition`/`lab`/`drug_a`/`drug_b` are caller-supplied structured fields, not free text an NL parser extracts.
+
+- [x] **Added a plausibility check for `condition`/`lab`/`drug_a`/`drug_b` against the graph's real vocabulary.** New `block5_agent/plausibility_check.py` queries Neo4j once for its actual condition/drug/lab values, caches them, and checks each caller-supplied value against that list rather than against an external medical vocabulary — a validly-typed, length-bounded value that isn't a real term in this graph (an instruction fragment, a jailbreak attempt) still surfaces in tracing instead of being silently accepted. Corrects `docs/spec.md`'s LLM01 section to describe this real mechanism instead of the fictional NL-parsing step it previously assumed.
+- [x] **Bounded both vocabulary queries with a server-side timeout.** `_fetch_known_vocabulary`'s condition/drug queries had no `timeout=`, so an unresponsive Neo4j instance would hang the check indefinitely instead of failing fast into its own fail-open handling. Wrapped both in `Query(..., timeout=GRAPH_QUERY_TIMEOUT)`, importing the constant directly from `graph_tool.py` rather than duplicating it. Deliberately no `LIMIT` on either query — the check needs the complete vocabulary, not a sample, or legitimate values past a cutoff would false-positive as unrecognized.
+- [x] **Merged `phase-14-retry-backoff-hardening` forward**, bringing in that phase's retry/backoff hardening, exception classification, and its `ClientConfiguration` timeout-code fix.
+- [x] **Fixed this branch's own new test to use the real `ClientConfiguration` code.** `tests/test_plausibility_check.py` — the one file `phase-14` doesn't have — still constructed its fake `ClientError` with the original, wrong timeout code even after merging phase-14's `error_classification.py` fix forward, so it wasn't actually exercising the retry-classification path it claimed to. Updated the fake to carry the real code too.
+- [x] 65 passed, 1 skipped (live-data integration test) — full suite
+- [x] Push `phase-15-plausibility-check`, open PR against `phase-14-retry-backoff-hardening` (PR #16, open)
