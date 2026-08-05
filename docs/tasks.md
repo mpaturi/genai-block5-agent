@@ -584,3 +584,11 @@ merged.
 **PR #14 status: open, not merged, stacked on and blocked by #13** — do
 not treat this phase as complete until #14 actually merges (and #13
 merges first).
+
+## Phase 16 — Cohort-style injection test parity (`phase-16-cohort-injection-test-parity`, base: `main`)
+
+Closes genai-block7-security's docs/spec.md LLM06 gap between Block 5 and Block 6's Cypher-injection test coverage — brings `graph_tool.py`'s adversarial-input tests up to the same rigor Block 6's `cohort_tool.py` tests already have.
+
+- [x] **Added lab/comparison injection tests for `count_drugs`, mirroring Block 6's coverage.** The existing adversarial-input tests here (`test_count_drugs_rejects_unrecognized_lab`/`comparison_without_querying`) used benign unrecognized values and asserted only via a `NeverOpenedDriver` — proving the whitelist gate runs, but not exercising anything Cypher-injection-shaped. Added two adversarial tests, reusing this file's own existing `NeverOpenedDriver`, proving the `lab`/`comparison` whitelist rejects before any driver interaction even for injection-flavored input. Also added the dynamic parameterization check Block 6 has and this file didn't: inspecting what a fake driver actually received confirms `condition`/`value`/`person_ids` reach it only as bound `$parameters`, never interpolated into the query text.
+- [x] 35 passed, 1 skipped (live-data integration test) — full suite
+- [x] Push `phase-16-cohort-injection-test-parity`, open PR against `main` (no PR opened yet as of this section)
