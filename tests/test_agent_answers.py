@@ -392,3 +392,51 @@ def test_full_success_threads_rag_citations_alongside_patient_ids():
     for key in ("cost_usd", "input_tokens", "output_tokens"):
         assert isinstance(cost_info[key], (int, float))
         assert cost_info[key] >= 0
+
+
+def test_run_agent_never_silently_returns_a_none_final_answer():
+    # Verification, not a fix: Block 5 has no equivalent of Block 6's
+    # state-validation mechanism that caused an analogous bug there (a
+    # node silently leaving state["final_answer"] as None, later handed
+    # to a caller that crashed on the unguarded None). This confirms the
+    # same failure mode can't happen silently here either.
+    #
+    # Why this is safe by construction, not because of an explicit guard
+    # anywhere in agent.py: synthesize_node builds the final answer via
+    # `ClinicalAnswer(answer=answer_text, ...)` directly (see agent.py) -
+    # not a plain dict merged in later - so if answer_fn returns something
+    # that can't satisfy ClinicalAnswer's schema (here, None, for the
+    # required `answer: str` field), pydantic validates on construction
+    # and raises immediately, right there inside synthesize_node -
+    # *outside* the try/except that only wraps the answer_fn() call
+    # itself (see agent.py's synthesize_node). There is no
+    # drop-and-continue step anywhere in this graph that could catch that
+    # ValidationError and substitute a None (or otherwise malformed)
+    # final_answer instead - it propagates straight out of
+    # compiled.invoke() and run_agent(), the same real ValidationError
+    # Block 6's _run_branch already knows how to catch, rather than ever
+    # reaching a caller as a silent None.
+    search_fn = _CountingFake(
+        lambda query_text, condition, lab, comparison, value, top_k=25: {
+            "answer": "some patients matched",
+            "patient_ids": [1, 2, 3],
+            "citations": [
+                {"patient_id": 1, "chunk_id": "1_chunk0", "snippet": "Patient 1 text."},
+            ],
+            "retrieved_count": 1,
+        }
+    )
+    count_fn = _CountingFake(
+        lambda patient_ids, condition, lab, comparison, value: {
+            "drug_counts": {"Lisinopril": 2},
+            "patients_checked": 3,
+        }
+    )
+    # Neither a valid string nor a (text, input_tokens, output_tokens)
+    # tuple - reaches ClinicalAnswer(answer=None, ...) directly.
+    answer_fn = _CountingFake(lambda *args: None)
+
+    with pytest.raises(ValidationError):
+        run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn, answer_fn=answer_fn)
+
+    assert answer_fn.call_count == 1
