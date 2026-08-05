@@ -193,9 +193,13 @@ def test_a_server_side_query_timeout_fails_open_instead_of_hanging():
     # failing fast - and _FakeSession.run()'s own isinstance/timeout
     # assertions above would catch a regression where that wrapping is
     # ever removed, since this fake (like every other test in this file)
-    # only returns successfully after passing those checks.
+    # only returns successfully after passing those checks. The
+    # "ClientConfiguration" suffix is what a real Query(timeout=...)
+    # expiration actually produces (verified directly against a live
+    # Neo4j 5.18-community server) - see block5_agent/error_classification.py's
+    # own two-code test for the base-code (server-configured timeout) case.
     exc_to_raise = _make_client_error(
-        "Neo.ClientError.Transaction.TransactionTimedOut",
+        "Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration",
         "The transaction has been terminated",
     )
     driver = _FakeDriver(_REAL_CONDITIONS, _REAL_DRUGS, raise_exc=exc_to_raise)
