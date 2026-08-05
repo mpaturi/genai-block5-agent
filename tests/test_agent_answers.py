@@ -17,6 +17,8 @@ ClinicalAnswer the same way rag_patient_ids already is - it stubs every
 step, same as the others, and asserts nothing about the free-text answer
 itself.
 """
+import anthropic
+import httpx
 import pytest
 from pydantic import BaseModel, ValidationError
 
@@ -262,6 +264,66 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
         "sentence is missing."
     )
     assert answer.outcome == "tool_error"
+
+
+def test_answer_step_retryable_failure_succeeds_on_second_attempt():
+    # anthropic.APITimeoutError classifies as "timeout" (see
+    # block5_agent/error_classification.py) - one of the two retryable
+    # kinds for the answer step - so a real transient failure here must
+    # actually be retried, not treated as permanent. Unlike
+    # test_answer_step_failed_after_one_retry_returns_fixed_answer above
+    # (which exhausts the retry budget and still fails), this proves the
+    # retry can genuinely recover: the second attempt succeeds and the
+    # run reaches the real full-success path, not the degraded fallback
+    # wording.
+    search_fn = _CountingFake(
+        lambda query_text, condition, lab, comparison, value, top_k=25: {
+            "answer": "some patients matched",
+            "patient_ids": [1, 2, 3],
+            "citations": [
+                {"patient_id": 1, "chunk_id": "1_chunk0", "snippet": "Patient 1 text."},
+            ],
+            "retrieved_count": 1,
+        }
+    )
+    count_fn = _CountingFake(
+        lambda patient_ids, condition, lab, comparison, value: {
+            "drug_counts": {"Lisinopril": 2},
+            "patients_checked": 3,
+        }
+    )
+    timeout_error = anthropic.APITimeoutError(
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    )
+    attempts = []
+
+    def _fail_once_then_succeed(*args, **kwargs):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise timeout_error
+        return "Two patients are on Lisinopril."
+
+    answer_fn = _CountingFake(_fail_once_then_succeed)
+    recorded_delays = []
+
+    answer, count_step_ran, cost_info = run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        answer_fn=answer_fn,
+        sleep_fn=lambda seconds: recorded_delays.append(seconds),
+    )
+
+    # 1 retry => 2 attempts total, the first failing, the second succeeding.
+    assert answer_fn.call_count == 2
+    # One backoff delay before the successful retry, per docs/spec.md's
+    # Agent steps (0.5 * attempt_number).
+    assert recorded_delays == [0.5]
+    assert count_step_ran is True
+    assert answer.outcome == "answered"
+    assert answer.answer == "Two patients are on Lisinopril."
+    assert answer.rag_patient_ids == [1, 2, 3]
+    assert answer.graph_result == {"Lisinopril": 2}
 
 
 def test_answer_step_permanent_failure_fails_immediately_without_retrying():
