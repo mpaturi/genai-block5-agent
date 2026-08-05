@@ -175,9 +175,13 @@ def test_count_drugs_raises_graph_service_error_on_timeout():
     # _make_client_error above) so .code is genuinely set to the timeout
     # code classify_exception looks for - a bare
     # ClientError("Neo.ClientError...") string leaves .code at its
-    # unrelated default and would not exercise this path at all.
+    # unrelated default and would not exercise this path at all. The
+    # "ClientConfiguration" suffix is what a real Query(timeout=...)
+    # expiration actually produces (verified directly against a live
+    # Neo4j 5.18-community server) - see
+    # error_classification.py's own two-code test for the base-code case.
     exc_to_raise = _make_client_error(
-        "Neo.ClientError.Transaction.TransactionTimedOut",
+        "Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration",
         "The transaction has been terminated",
     )
     driver = _FakeDriver(raise_exc=exc_to_raise)
