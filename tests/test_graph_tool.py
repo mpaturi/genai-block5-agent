@@ -5,10 +5,16 @@ contract count_drugs() must satisfy. All should fail with an ImportError
 until Phase 3 implements it. The Neo4j driver is faked throughout, so none
 of this needs a real graph database running.
 """
+import pytest
 from neo4j import Query
 from neo4j.exceptions import Neo4jError
 
-from block5_agent.graph_tool import GRAPH_QUERY_TIMEOUT, GraphServiceError, count_drugs
+from block5_agent.graph_tool import (
+    GRAPH_QUERY_TIMEOUT,
+    VERIFY_PATIENTS_QUERY_TEMPLATE,
+    GraphServiceError,
+    count_drugs,
+)
 
 _CONDITION = "Essential hypertension"
 _LAB = "SBP"
@@ -43,12 +49,15 @@ class _FakeResult:
 
 
 class _FakeSession:
-    def __init__(self, verified_ids=None, count_rows=None, raise_exc=None):
+    def __init__(self, verified_ids=None, count_rows=None, raise_exc=None, recorded_calls=None):
         self._verified_ids = verified_ids if verified_ids is not None else []
         self._count_rows = count_rows or []
         self._raise_exc = raise_exc
+        self._recorded_calls = recorded_calls
 
     def run(self, query, **params):
+        if self._recorded_calls is not None:
+            self._recorded_calls.append((query, params))
         if self._raise_exc is not None:
             raise self._raise_exc
         # The real driver has no timeout kwarg on run() - a bounded query
@@ -72,9 +81,12 @@ class _FakeDriver:
         self._verified_ids = verified_ids
         self._count_rows = count_rows
         self._raise_exc = raise_exc
+        self.recorded_calls = []
 
     def session(self, database=None):
-        return _FakeSession(self._verified_ids, self._count_rows, self._raise_exc)
+        return _FakeSession(
+            self._verified_ids, self._count_rows, self._raise_exc, recorded_calls=self.recorded_calls
+        )
 
 
 class _NeverOpenedDriver:
@@ -266,3 +278,50 @@ def test_count_drugs_rejects_unrecognized_comparison_without_querying():
     except GraphServiceError as exc:
         assert exc.detail == "invalid_lab_or_comparison"
         assert exc.retryable is False
+
+
+def test_adversarial_condition_value_and_person_ids_are_bound_as_parameters_never_interpolated():
+    # A value that would break out of the query text's string literal and
+    # inject a second write clause, if it were ever concatenated/formatted
+    # into the Cypher instead of bound as a $parameter.
+    malicious_condition = "Essential hypertension'}) DETACH DELETE (p) //"
+    driver = _FakeDriver(verified_ids=[1], count_rows=[])
+
+    _count_drugs([1], condition=malicious_condition, driver=driver)
+
+    sent_query, sent_params = driver.recorded_calls[0]
+    expected_query_text = VERIFY_PATIENTS_QUERY_TEMPLATE.format(lab_property="latest_sbp", op=">")
+    # The query text sent to the driver is exactly the fixed template,
+    # byte-for-byte - the malicious value never touched it.
+    assert sent_query.text == expected_query_text
+    assert "DETACH DELETE" not in sent_query.text
+    assert "//" not in sent_query.text
+
+    # The malicious string, along with value and person_ids, reaches the
+    # driver only as bound parameter values, unmodified - the one place
+    # they're allowed to be, since the driver (not Python string
+    # formatting) is responsible for treating them as inert data rather
+    # than executable Cypher.
+    assert sent_params["condition"] == malicious_condition
+    assert sent_params["person_ids"] == [1]
+    assert sent_params["value"] == _VALUE
+
+
+def test_adversarial_lab_is_rejected_before_reaching_the_driver():
+    malicious_lab = "SBP AND (p) DETACH DELETE (p) //"
+
+    with pytest.raises(GraphServiceError) as exc_info:
+        count_drugs([1], "Essential hypertension", malicious_lab, "above", 140, driver=_NeverOpenedDriver())
+
+    assert exc_info.value.detail == "invalid_lab_or_comparison"
+    assert exc_info.value.retryable is False
+
+
+def test_adversarial_comparison_is_rejected_before_reaching_the_driver():
+    malicious_comparison = "above'}) SET p.person_id = 0 //"
+
+    with pytest.raises(GraphServiceError) as exc_info:
+        count_drugs([1], "Essential hypertension", "SBP", malicious_comparison, 140, driver=_NeverOpenedDriver())
+
+    assert exc_info.value.detail == "invalid_lab_or_comparison"
+    assert exc_info.value.retryable is False

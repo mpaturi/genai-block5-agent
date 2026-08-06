@@ -9,7 +9,7 @@ apart by each writing their own copy.
 """
 from typing import Literal, Optional, TypedDict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 Comparison = Literal["above", "below"]
 Confidence = Literal["high", "medium", "low"]
@@ -24,14 +24,48 @@ class QuestionInput(BaseModel):
     Defined as separate fields, not one opaque string, so building the RAG
     query (below) is a plain lookup of which fields to use instead of a
     text-parsing problem.
+
+    Bounds matter here directly, not just as a nice-to-have: condition/lab/
+    drug_a/drug_b are f-string'd straight into text that reaches an LLM
+    prompt (build_rag_query()/assemble_question_text() below) and, for
+    condition/lab, a Pinecone-embedded RAG query, on every single request -
+    an unbounded caller string is unbounded prompt-injection surface every
+    time. value feeds the same two functions and _format_value() below;
+    a non-finite float (inf/-inf/nan) would either format nonsensically or
+    crash int()/str() coercion before it ever reached a real comparison.
+
+    max_length=200 for condition, 100 for lab/drug_a/drug_b: real clinical
+    condition names/phrases run longer than single lab or drug names (e.g.
+    compound SNOMED-style descriptions), so condition gets a wider
+    allowance; both limits are many times longer than any real entry in
+    Block 3's graph vocabulary, generous for genuine clinical terms while
+    still closing off multi-megabyte payloads.
+
+    value: ge=0 (every lab this system knows - see graph_tool.py's
+    _LAB_PROPERTY - is a non-negative measurement; a negative value can
+    never match a real patient), le=10_000 (comfortably above any real
+    unit in use - HbA1c tops out near 20, systolic BP near 300, glucose in
+    the low thousands mg/dL at the extreme - while still rejecting a
+    deliberately absurd float before it reaches a prompt). Also rejects
+    inf/-inf/nan, none of which pydantic's float coercion treats as
+    satisfying a finite ge/le range.
+
+    Same field names, same limits, same reasoning as Block 8's own
+    `QueryRequest(QuestionInput)` (genai-block8-capstone/app/api.py) -
+    ported here so every caller of this schema gets the bounds, not just
+    Block 8's API layer. This makes Block 8's own Field(...) redeclaration
+    a redundant *second* layer at its own boundary now, not the only one -
+    intentional defense-in-depth (each project validates independently at
+    its own trust boundary, per this project's input-validation rule), not
+    duplication to go clean up there.
     """
 
-    condition: str
-    lab: str
+    condition: str = Field(max_length=200)
+    lab: str = Field(max_length=100)
     comparison: Comparison
-    value: float
-    drug_a: str
-    drug_b: str
+    value: float = Field(ge=0, le=10_000)
+    drug_a: str = Field(max_length=100)
+    drug_b: str = Field(max_length=100)
 
 
 def _format_value(value: float) -> str:
