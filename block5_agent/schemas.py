@@ -7,6 +7,7 @@ docs/spec.md requires to live in exactly one place so rag_tool.py,
 graph_tool.py, agent.py, and build_eval_answer_key.py can never drift
 apart by each writing their own copy.
 """
+import re
 from typing import Literal, Optional, TypedDict
 
 from pydantic import BaseModel, Field
@@ -16,6 +17,18 @@ Confidence = Literal["high", "medium", "low"]
 Outcome = Literal["answered", "nothing_found", "tool_error"]
 
 _COMPARISON_SYMBOLS: dict[Comparison, str] = {"above": ">", "below": "<"}
+
+# Same patterns, same reasoning, as genai-block4-rag-eval/scripts/
+# sanitize.py's sanitize_chunk_text() - unanchored so a role marker is
+# caught anywhere in the text, not just at start-of-line or right after
+# sentence-ending punctuation (an anchored version is a game of finding
+# every shape an injection could take; unanchored is simpler and strictly
+# safer). \b still guards against a false positive within a single word
+# ("ecosystem:" is not stripped).
+_ROLE_MARKER_RE = re.compile(r"(?i)\b(?:system|human|assistant|user)\s*:\s*")
+_CHAT_DELIMITER_RE = re.compile(
+    r"(?i)\[/?(?:INST|SYS)\]|<\|.*?\|>|#{2,}\s*(?:instructions?|response)\b"
+)
 
 
 class QuestionInput(BaseModel):
@@ -68,6 +81,32 @@ class QuestionInput(BaseModel):
     drug_b: str = Field(max_length=100)
 
 
+def sanitize_field(text: str) -> str:
+    """Strip conversation-turn markers from a caller-supplied
+    condition/lab/drug_a/drug_b value before it reaches an LLM prompt or
+    the RAG query text - same role-marker/chat-delimiter patterns, same
+    "replace marker with a single space, not empty string" reasoning
+    (preserves the sentence-boundary whitespace on both sides), as
+    genai-block4-rag-eval/scripts/sanitize.py's sanitize_chunk_text().
+    Public, not underscore-prefixed - block5_agent/agent.py needs to
+    import this too, for the two direct question.drug_a/question.drug_b
+    re-embeds in `_default_answer_fn()`'s prompt that don't route through
+    assemble_question_text() below - one shared implementation, not two
+    copies that could drift.
+
+    Never applied before check_plausibility() (block5_agent/
+    plausibility_check.py) sees these same four fields: that check's
+    exact-match logic and flag messages need the caller's real,
+    unmodified value - sanitizing first would let a flagged value quietly
+    become a different, sanitized string that no longer matches (or
+    mismatches) the graph's vocabulary the same way, and would make a
+    flag's message describe text the caller never actually sent.
+    """
+    text = _ROLE_MARKER_RE.sub(" ", text)
+    text = _CHAT_DELIMITER_RE.sub("", text)
+    return text
+
+
 def _format_value(value: float) -> str:
     """Render a whole-number value as "140", not "140.0"."""
     if value == int(value):
@@ -85,9 +124,15 @@ def build_rag_query(question: QuestionInput) -> str:
     same text for the same fields - two independently written versions of
     this formatting could drift in wording and silently change which
     patients a semantic search matches.
+
+    condition/lab are sanitized (see sanitize_field() above) before being
+    embedded - this text reaches Block 4's RAG service, which embeds it
+    and hands it back inside prose an LLM prompt elsewhere in this system
+    may read.
     """
     return (
-        f"patients with {question.condition} and {question.lab} "
+        f"patients with {sanitize_field(question.condition)} and "
+        f"{sanitize_field(question.lab)} "
         f"{question.comparison} {_format_value(question.value)}"
     )
 
@@ -97,13 +142,20 @@ def assemble_question_text(question: QuestionInput) -> str:
 
     Used for display, logging, and the `question` field in the structured
     output (see docs/spec.md's Question pattern) - never sent to RAG.
+
+    All four of condition/lab/drug_a/drug_b are sanitized (see
+    sanitize_field() above) before being embedded - this sentence becomes
+    part of `_default_answer_fn()`'s prompt (block5_agent/agent.py) on
+    every full-success run.
     """
     symbol = _COMPARISON_SYMBOLS[question.comparison]
     value_text = _format_value(question.value)
     return (
-        f"Of patients with {question.condition} and {question.lab} "
-        f"{symbol} {value_text}, how many are on {question.drug_a} vs. "
-        f"{question.drug_b}?"
+        f"Of patients with {sanitize_field(question.condition)} and "
+        f"{sanitize_field(question.lab)} "
+        f"{symbol} {value_text}, how many are on "
+        f"{sanitize_field(question.drug_a)} vs. "
+        f"{sanitize_field(question.drug_b)}?"
     )
 
 

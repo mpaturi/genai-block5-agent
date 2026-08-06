@@ -27,6 +27,7 @@ from block5_agent.schemas import (
     assemble_question_text,
     build_rag_query,
     compute_confidence,
+    sanitize_field,
 )
 
 load_dotenv()
@@ -78,12 +79,19 @@ def _default_answer_fn(
     the caller can log real token usage (see docs/spec.md's Tracing and
     logging) - this is the only answer_fn implementation real runs use, so
     only it needs to report usage; the fakes tests substitute never do.
+
+    question.drug_a/question.drug_b are sanitized (see block5_agent/
+    schemas.py's sanitize_field()) on the "count:" lines below - these two
+    re-embeds don't route through assemble_question_text() (which already
+    sanitizes its own copy of drug_a/drug_b), so without this they'd be
+    the one place an injected drug_a/drug_b value still reached this
+    prompt unsanitized.
     """
     prompt = (
         f"Question: {assemble_question_text(question)}\n"
         f"Matching patient IDs: {rag_patient_ids}\n"
-        f"{question.drug_a} count: {drug_a_count}\n"
-        f"{question.drug_b} count: {drug_b_count}\n\n"
+        f"{sanitize_field(question.drug_a)} count: {drug_a_count}\n"
+        f"{sanitize_field(question.drug_b)} count: {drug_b_count}\n\n"
         "Write exactly one plain-English sentence answering the question. "
         "Name both drug counts and cite the patient IDs. Do not add "
         "anything beyond that one sentence."
