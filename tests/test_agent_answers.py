@@ -76,6 +76,16 @@ def _always_raise(exc):
     return _fn
 
 
+def _no_flags_plausibility_check_fn(condition, lab, drug_a, drug_b):
+    """A fake for run_agent's plausibility_check_fn override - keeps
+    every test in this file isolated from a real Neo4j connection (see
+    block5_agent/plausibility_check.py's real default), the same way
+    search_fn/count_fn are always faked here too. Adversarial coverage of
+    the real plausibility check running through run_agent lives in
+    tests/test_agent_plausibility.py instead."""
+    return []
+
+
 def test_nothing_found_short_circuits_to_fixed_fallback_answer():
     search_fn = _CountingFake(
         lambda query_text, condition, lab, comparison, value, top_k=25: {
@@ -87,7 +97,12 @@ def test_nothing_found_short_circuits_to_fixed_fallback_answer():
     )
     count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
 
-    answer, count_step_ran, cost_info = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
+    answer, count_step_ran, cost_info = run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
+    )
 
     assert search_fn.call_count == 1
     # The agent forwards top_k=25 (up from 20, Block 4's raised
@@ -116,7 +131,12 @@ def test_search_step_broken_after_retries_returns_fixed_error_answer():
     search_fn = _CountingFake(_always_raise(RAGServiceError("connection_error")))
     count_fn = _CountingFake(lambda *args: pytest.fail("count step must be skipped"))
 
-    answer, count_step_ran, cost_info = run_agent(QUESTION, search_fn=search_fn, count_fn=count_fn)
+    answer, count_step_ran, cost_info = run_agent(
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
+    )
 
     # 2 retries => 3 attempts total, per docs/spec.md's Agent steps section.
     assert search_fn.call_count == 3
@@ -147,13 +167,13 @@ def test_search_step_retries_back_off_between_attempts_but_not_after_the_last_on
         search_fn=search_fn,
         count_fn=count_fn,
         sleep_fn=lambda seconds: recorded_delays.append(seconds),
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
     )
 
     # 3 attempts total, so 2 backoff delays between them - none after the
     # final, exhausted attempt (nothing left to wait for).
     assert recorded_delays == [0.5, 1.0]
     assert search_fn.call_count == 3
-
 
 def test_graph_step_broken_after_retries_returns_degraded_answer():
     # recorded_delays proves the same backoff (0.5s, 1.0s - see docs/spec.md's
@@ -180,6 +200,7 @@ def test_graph_step_broken_after_retries_returns_degraded_answer():
         search_fn=search_fn,
         count_fn=count_fn,
         sleep_fn=lambda seconds: recorded_delays.append(seconds),
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
     )
 
     assert search_fn.call_count == 1
@@ -235,7 +256,11 @@ def test_answer_step_failed_after_one_retry_returns_fixed_answer():
     answer_fn = _CountingFake(_always_raise(ConnectionError("connection reset")))
 
     answer, count_step_ran, cost_info = run_agent(
-        QUESTION, search_fn=search_fn, count_fn=count_fn, answer_fn=answer_fn
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        answer_fn=answer_fn,
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
     )
 
     assert search_fn.call_count == 1
@@ -358,6 +383,7 @@ def test_answer_step_permanent_failure_fails_immediately_without_retrying():
         count_fn=count_fn,
         answer_fn=answer_fn,
         sleep_fn=lambda seconds: recorded_delays.append(seconds),
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
     )
 
     assert answer_fn.call_count == 1
@@ -403,6 +429,7 @@ def test_answer_step_unclassified_failure_fails_immediately_without_retrying():
         count_fn=count_fn,
         answer_fn=answer_fn,
         sleep_fn=lambda seconds: recorded_delays.append(seconds),
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
     )
 
     assert answer_fn.call_count == 1
@@ -438,7 +465,11 @@ def test_full_success_threads_rag_citations_alongside_patient_ids():
     answer_fn = _CountingFake(lambda *args: "Two patients are on Lisinopril, one on Amlodipine.")
 
     answer, count_step_ran, cost_info = run_agent(
-        QUESTION, search_fn=search_fn, count_fn=count_fn, answer_fn=answer_fn
+        QUESTION,
+        search_fn=search_fn,
+        count_fn=count_fn,
+        answer_fn=answer_fn,
+        plausibility_check_fn=_no_flags_plausibility_check_fn,
     )
 
     assert count_step_ran is True

@@ -215,3 +215,4 @@ class AgentState(TypedDict):
     final_answer: Optional[dict]
     count_step_ran: bool
     outcome: Optional[str]
+    plausibility_flags: list[str]

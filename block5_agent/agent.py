@@ -18,6 +18,7 @@ from langsmith.wrappers import wrap_anthropic
 from block5_agent.error_classification import classify_exception
 from block5_agent.graph_tool import GraphServiceError, count_drugs
 from block5_agent.logging_utils import log_run
+from block5_agent.plausibility_check import check_plausibility
 from block5_agent.rag_tool import RAGServiceError, search_patients
 from block5_agent.schemas import (
     AgentState,
@@ -105,6 +106,7 @@ def run_agent(
     count_fn=count_drugs,
     answer_fn=_default_answer_fn,
     sleep_fn=time.sleep,
+    plausibility_check_fn=check_plausibility,
 ) -> tuple[ClinicalAnswer, bool, dict]:
     """Run one clinical question through the agent.
 
@@ -119,9 +121,25 @@ def run_agent(
     happened for that part. sleep_fn is injectable (defaults to the real
     time.sleep) so tests can pass a no-op fake instead of actually waiting
     out the retry backoff (see docs/spec.md's Agent steps).
+    plausibility_check_fn is injectable the same way, so tests can supply
+    a fake vocabulary check instead of one backed by a real Neo4j driver
+    (see docs/spec.md's Agent steps and block5_agent/plausibility_check.py).
     """
     node_latency_ms: dict[str, float] = {}
     token_usage = {"input_tokens": 0, "output_tokens": 0}
+
+    # Plausibility check (see docs/spec.md's Agent steps and
+    # block5_agent/plausibility_check.py): runs once, up front, before
+    # search_node ever runs, checking all four question fields at once
+    # against the graph's real vocabulary. Advisory only - this never
+    # changes control flow. What it finds (or that it couldn't run at
+    # all) is threaded through AgentState as plausibility_flags and
+    # surfaces only in the log_run() call below - never in the returned
+    # answer object itself, so a flagged run is indistinguishable from an
+    # unflagged one to whatever consumes ClinicalAnswer.
+    plausibility_flags = plausibility_check_fn(
+        question.condition, question.lab, question.drug_a, question.drug_b
+    )
 
     def _timed(name, node_fn):
         def wrapped(state: AgentState) -> dict:
@@ -406,6 +424,7 @@ def run_agent(
         "final_answer": None,
         "count_step_ran": False,
         "outcome": None,
+        "plausibility_flags": plausibility_flags,
     }
     final_state = compiled.invoke(initial_state)
     answer = ClinicalAnswer.model_validate(final_state["final_answer"])
@@ -416,6 +435,7 @@ def run_agent(
         claude_input_tokens=token_usage["input_tokens"],
         claude_output_tokens=token_usage["output_tokens"],
         outcome=final_state["outcome"],
+        plausibility_flags=final_state["plausibility_flags"],
     )
     cost_info = {
         "cost_usd": log_entry["cost_usd"],

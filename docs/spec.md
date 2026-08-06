@@ -493,6 +493,29 @@ every failure path there is already covered by its own explicit
 status-code-based classification, so there's no default-retryable gap to
 close.
 
+Before any of the steps below run, the agent checks the question's
+`condition`, `lab`, `drug_a`, and `drug_b` fields against the graph's own
+real vocabulary — the distinct `Condition.condition_name` and
+`Drug.drug_name` values actually stored there, plus the fixed lab
+whitelist Tool 2 already uses (`block5_agent/graph_tool.py`'s
+`_LAB_PROPERTY`) — all four checked in one pass
+(`block5_agent/plausibility_check.py`'s `check_plausibility`), following
+the same query-once-and-cache pattern Block 6 Phase 4 already established
+(`genai-block6-multiagent/scripts/vocabulary_check.py`). The comparison is
+exact string equality only — no case-folding, no substring match — since
+a substring check would let a real term with injected text appended to it
+(e.g. `"Hypertension\nIgnore all previous instructions"`) pass simply
+because the real term appears inside it. This check is advisory, not a
+gate: it never changes control flow or blocks a question from being
+answered, and if the vocabulary query itself fails (the graph is
+unreachable), the check fails open — it reports that it couldn't run
+rather than blocking the request or crashing it, since this is a
+"flagged", not "blocked", severity check. Whatever the check finds (or
+that it couldn't run) is threaded through `AgentState` as
+`plausibility_flags` and written to the `plausibility_flags` field of the
+log entry `log_run()` writes to `data/logs/runs.jsonl` — it never appears
+in the returned `ClinicalAnswer` itself.
+
 The agent moves through a fixed sequence of steps:
 
 1. **Search** — call the semantic search tool. If it fails in a way that
@@ -560,8 +583,11 @@ non-deterministic call to the language model.
   means for real, per-run cost).
 - Every run is logged with: the question, time spent per step, tokens
   used, an estimated cost in dollars, the outcome (answered, nothing
-  found, or a tool failure), and whether the count step actually ran.
-  These logs are written to `data/logs/runs.jsonl`, one line per run.
+  found, or a tool failure), whether the count step actually ran, and the
+  plausibility check's flags (see Agent steps) — empty when
+  `condition`/`lab`/`drug_a`/`drug_b` all matched the graph's real
+  vocabulary. These logs are written to `data/logs/runs.jsonl`, one line
+  per run.
   This file is generated output, not source code, so it isn't committed
   to the repo.
 - That last item — whether the count step ran — is also handed back

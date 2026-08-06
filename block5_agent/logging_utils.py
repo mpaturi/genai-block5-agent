@@ -29,8 +29,18 @@ def log_run(
     claude_input_tokens: int,
     claude_output_tokens: int,
     outcome: str,
+    plausibility_flags: list | None = None,
 ) -> dict:
-    """Append one JSON line for this run and return the entry that was written."""
+    """Append one JSON line for this run and return the entry that was written.
+
+    plausibility_flags (see block5_agent/plausibility_check.py and docs/
+    spec.md's Agent steps) is where the plausibility check's result
+    surfaces - empty when every field matched the graph's real vocabulary,
+    non-empty when something was flagged (including the vocabulary query
+    itself failing, see that module's fail-open docstring). Defaults to an
+    empty list, not required, so callers that don't run the check don't
+    have to think about it.
+    """
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "run_id": str(uuid.uuid4()),
@@ -42,6 +52,7 @@ def log_run(
         "cost_usd": round(_compute_cost_usd(claude_input_tokens, claude_output_tokens), 6),
         "total_latency_ms": round(sum(node_latency_ms.values()), 2),
         "outcome": outcome,
+        "plausibility_flags": plausibility_flags if plausibility_flags is not None else [],
     }
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
