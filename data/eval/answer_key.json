@@ -1,5 +1,5 @@
 {
-  "q1": {
+  "q1_expected_capped": {
     "rag_patient_ids": [
       7253,
       8737,
@@ -35,6 +35,116 @@
     "patients_checked": 25,
     "confidence": "high"
   },
+  "q1": {
+    "rag_patient_ids": [
+      18,
+      67,
+      583,
+      764,
+      809,
+      909,
+      1550,
+      1577,
+      1638,
+      1829,
+      2003,
+      2016,
+      2027,
+      2132,
+      2232,
+      2268,
+      2463,
+      2490,
+      2549,
+      2677,
+      2875,
+      2970,
+      3090,
+      3134,
+      3172,
+      3633,
+      3691,
+      3702,
+      3742,
+      3878,
+      3938,
+      3976,
+      4092,
+      4191,
+      4243,
+      4322,
+      4372,
+      4452,
+      4667,
+      4929,
+      4940,
+      5148,
+      5322,
+      5377,
+      5599,
+      5915,
+      6001,
+      6168,
+      6202,
+      6343,
+      6357,
+      6700,
+      6754,
+      6883,
+      6900,
+      7056,
+      7170,
+      7194,
+      7253,
+      7371,
+      7459,
+      7461,
+      7556,
+      7685,
+      7705,
+      7765,
+      8030,
+      8139,
+      8261,
+      8267,
+      8300,
+      8434,
+      8695,
+      8714,
+      8737,
+      8834,
+      8849,
+      8893,
+      8960,
+      9071,
+      9140,
+      9282,
+      9287,
+      10120,
+      10278,
+      10279,
+      10421,
+      10527,
+      10745,
+      11015,
+      11171,
+      11257,
+      11258,
+      11278,
+      11302,
+      11386,
+      11459,
+      11468,
+      11504
+    ],
+    "graph_result": {
+      "Amlodipine": 28,
+      "Lisinopril": 49,
+      "Hydrochlorothiazide": 11
+    },
+    "patients_checked": 99,
+    "confidence": "high"
+  },
   "q2": {
     "rag_patient_ids": [
       10328,
@@ -42,11 +152,11 @@
       1563
     ],
     "graph_result": {
+      "Amlodipine": 1,
+      "Lisinopril": 1,
+      "Hydrochlorothiazide": 1,
       "Alendronic acid": 2,
       "Ciprofloxacin": 1,
-      "Hydrochlorothiazide": 1,
-      "Lisinopril": 1,
-      "Amlodipine": 1,
       "Insulin": 1
     },
     "patients_checked": 3,
@@ -74,8 +184,8 @@
       4361
     ],
     "graph_result": {
-      "Digoxin": 1,
-      "Warfarin": 1
+      "Warfarin": 1,
+      "Digoxin": 1
     },
     "patients_checked": 1,
     "confidence": "low"
@@ -87,9 +197,9 @@
       6597
     ],
     "graph_result": {
-      "Simvastatin": 2,
+      "Amlodipine": 1,
       "Hydrochlorothiazide": 1,
-      "Amlodipine": 1
+      "Simvastatin": 2
     },
     "patients_checked": 3,
     "confidence": "low"
@@ -117,14 +227,14 @@
     ],
     "graph_result": {
       "Amlodipine": 4,
-      "Hydrochlorothiazide": 4,
-      "Metformin": 3,
       "Lisinopril": 4,
-      "Carvedilol": 5,
+      "Hydrochlorothiazide": 4,
       "Alendronic acid": 4,
-      "Simvastatin": 2,
+      "Insulin": 1,
       "Enoxaparin": 1,
-      "Insulin": 1
+      "Simvastatin": 2,
+      "Metformin": 3,
+      "Carvedilol": 5
     },
     "patients_checked": 18,
     "confidence": "medium"
@@ -184,15 +294,15 @@
       6707
     ],
     "graph_result": {
-      "Hydrochlorothiazide": 7,
-      "Metformin": 16,
-      "Simvastatin": 1,
+      "Amlodipine": 6,
       "Lisinopril": 5,
+      "Hydrochlorothiazide": 7,
+      "Alendronic acid": 2,
+      "Insulin": 3,
       "Digoxin": 1,
       "Warfarin": 1,
-      "Alendronic acid": 2,
-      "Amlodipine": 6,
-      "Insulin": 3
+      "Simvastatin": 1,
+      "Metformin": 16
     },
     "patients_checked": 19,
     "confidence": "medium"
