@@ -6,7 +6,7 @@ until Phase 3 implements it. The Neo4j driver is faked throughout, so none
 of this needs a real graph database running.
 """
 from neo4j import Query
-from neo4j.exceptions import ClientError
+from neo4j.exceptions import Neo4jError
 
 from block5_agent.graph_tool import GRAPH_QUERY_TIMEOUT, GraphServiceError, count_drugs
 
@@ -14,6 +14,18 @@ _CONDITION = "Essential hypertension"
 _LAB = "SBP"
 _COMPARISON = "above"
 _VALUE = 140
+
+
+def _make_client_error(code: str, message: str = "boom"):
+    # Neo4jError._hydrate_neo4j is the driver's own real construction path
+    # (used internally when the server returns an error) - this builds a
+    # real ClientError/CypherSyntaxError/etc instance with a real .code,
+    # not a hand-rolled duck-typed fake. Matches
+    # tests/test_error_classification.py's own helper of the same name,
+    # since classify_exception (see block5_agent/error_classification.py)
+    # is what count_drugs() now uses to decide retryable, and that
+    # decision depends on .code actually being set correctly.
+    return Neo4jError._hydrate_neo4j(code=code, message=message)
 
 
 class _FakeResult:
@@ -138,13 +150,20 @@ def test_count_drugs_rejects_non_integer_ids_without_querying():
 
 
 def test_count_drugs_raises_graph_service_error_on_driver_failure():
-    driver = _FakeDriver(raise_exc=RuntimeError("boom"))
+    # A plain connection failure - classify_exception (see
+    # block5_agent/error_classification.py) classifies this as
+    # "connection_error", one of the two retryable kinds, so this must
+    # come back retryable, and `detail` is the exception's real message
+    # (str(exc)), not just its type name - matching Block 6's own
+    # cohort_tool.py pattern exactly.
+    exc_to_raise = ConnectionError("connection reset")
+    driver = _FakeDriver(raise_exc=exc_to_raise)
 
     try:
         _count_drugs([1, 2, 3], driver=driver)
         assert False, "expected GraphServiceError"
     except GraphServiceError as exc:
-        assert exc.detail == "RuntimeError"
+        assert exc.detail == str(exc_to_raise)
         assert exc.retryable is True
 
 
@@ -152,20 +171,47 @@ def test_count_drugs_raises_graph_service_error_on_timeout():
     # A slow query fails the same way a slow RAG call already does (see
     # docs/spec.md's "Agent steps") - a driver-raised timeout must be
     # caught by the same broad except and treated as retryable, not as
-    # bad input.
-    driver = _FakeDriver(
-        raise_exc=ClientError(
-            "Neo.ClientError.Transaction.TransactionTimedOut: "
-            "The transaction has been terminated"
-        )
+    # bad input. Built via the driver's own real hydration path (see
+    # _make_client_error above) so .code is genuinely set to the timeout
+    # code classify_exception looks for - a bare
+    # ClientError("Neo.ClientError...") string leaves .code at its
+    # unrelated default and would not exercise this path at all. The
+    # "ClientConfiguration" suffix is what a real Query(timeout=...)
+    # expiration actually produces (verified directly against a live
+    # Neo4j 5.18-community server) - see
+    # error_classification.py's own two-code test for the base-code case.
+    exc_to_raise = _make_client_error(
+        "Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration",
+        "The transaction has been terminated",
     )
+    driver = _FakeDriver(raise_exc=exc_to_raise)
 
     try:
         _count_drugs([1, 2, 3], driver=driver)
         assert False, "expected GraphServiceError"
     except GraphServiceError as exc:
-        assert exc.detail == "ClientError"
+        assert exc.detail == str(exc_to_raise)
         assert exc.retryable is True
+
+
+def test_count_drugs_raises_graph_service_error_not_retryable_on_syntax_error():
+    # Regression test for the blanket-retry bug: count_drugs()'s except
+    # block used to do `raise GraphServiceError(type(exc).__name__)` with
+    # no retryable= argument, and GraphServiceError defaults retryable to
+    # True - so a permanent failure like a Cypher syntax error was
+    # incorrectly retried 3 times instead of failing immediately. A real
+    # syntax error, built the same way the timeout case above is, must
+    # classify as "unknown" (see block5_agent/error_classification.py)
+    # and come back non-retryable.
+    exc_to_raise = _make_client_error("Neo.ClientError.Statement.SyntaxError", "bad cypher")
+    driver = _FakeDriver(raise_exc=exc_to_raise)
+
+    try:
+        _count_drugs([1, 2, 3], driver=driver)
+        assert False, "expected GraphServiceError"
+    except GraphServiceError as exc:
+        assert exc.detail == str(exc_to_raise)
+        assert exc.retryable is False
 
 
 def test_count_drugs_excludes_a_patient_who_fails_the_condition_check():

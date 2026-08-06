@@ -464,6 +464,35 @@ the graph database run locally, so 10 seconds is generous enough to rule
 out "just a bit slow" while still failing fast on a real outage, rather
 than leaving a run hanging.
 
+Every retry (steps 1, 3, and 4 below) waits between attempts instead of
+retrying immediately — a short backoff of `0.5 * attempt_number` seconds
+(0.5s before the 2nd attempt, 1.0s before the 3rd), matching Block 6
+Phase 8's confirmed formula (`block5_agent/agent.py`'s
+`_RETRY_BACKOFF_SECONDS`). Whether a failure is worth retrying at all is
+decided by `classify_exception` (`block5_agent/error_classification.py`,
+ported from the same Block 6 phase): a caught exception is classified as
+`timeout`/`connection_error`/`validation_error`/`unknown`, and for step 4
+only the `timeout`/`connection_error` kinds are retried — an allow-list,
+matching Block 6 Phase 8's confirmed `cohort_tool.py` pattern exactly.
+`validation_error` and `unknown` are both treated as permanent —
+bad/malformed output or a genuine bug, not an infrastructure hiccup, so
+retrying identical input can't fix it — and fail immediately without
+consuming a retry or waiting out a backoff. Steps 1 and 3 each still have
+their own, local checks for specific known-bad input (an invalid
+`top_k`, an unrecognized `lab`/`comparison`, a non-positive patient ID)
+that set `retryable=False` directly, without going through
+`classify_exception` — a known validation failure doesn't need
+classifying, it's already known to be permanent. Step 3
+(`block5_agent/graph_tool.py`'s `count_drugs()`) additionally runs
+`classify_exception` on any other exception its Neo4j driver call raises,
+the same way step 4 does — closing the gap where an unrecognized driver
+failure used to default to retryable, and would then be retried 3 times
+even for a permanent failure like a Cypher syntax error. Step 1
+(`block5_agent/rag_tool.py`) does not use `classify_exception` at all —
+every failure path there is already covered by its own explicit
+status-code-based classification, so there's no default-retryable gap to
+close.
+
 The agent moves through a fixed sequence of steps:
 
 1. **Search** — call the semantic search tool. If it fails in a way that
