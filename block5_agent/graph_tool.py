@@ -19,6 +19,8 @@ import os
 from dotenv import load_dotenv
 from neo4j import GraphDatabase, Query
 
+from block5_agent.error_classification import classify_exception
+
 load_dotenv()
 
 NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
@@ -42,6 +44,14 @@ _LAB_PROPERTY = {
     "HbA1c": "latest_hba1c",
 }
 _COMPARISON_OP = {"above": ">", "below": "<"}
+
+# classify_exception's four kinds, split into what's actually worth
+# retrying: a real infra hiccup (timeout/connection_error) might clear up
+# on a second attempt, but "validation_error"/"unknown" mean either bad
+# input or a genuine bug - retrying 3 times just delays the same failure.
+# Matches Block 6's own cohort_tool.py pattern exactly
+# (genai-block6-multiagent/scripts/cohort_tool.py).
+_RETRYABLE_ERROR_KINDS = {"timeout", "connection_error"}
 
 # Confirms each candidate patient genuinely has the stated condition and
 # genuinely satisfies the lab comparison, using the graph's own stored
@@ -74,14 +84,25 @@ def _get_driver():
 
 
 class GraphServiceError(Exception):
-    """Raised on any drug-count-tool failure. `detail` names what went
-    wrong, mirroring Block 4's own {"error": ..., "detail": "<ExceptionType>"}
-    shape so both tools fail the same way from the agent's point of view.
+    """Raised on any drug-count-tool failure. For the two local validation
+    checks below, `detail` is a fixed short code ("invalid_person_id",
+    "invalid_lab_or_comparison"), mirroring Block 4's own
+    {"error": ..., "detail": ...} shape. For a real driver/query failure
+    caught in count_drugs()'s except block, `detail` is instead the
+    exception's actual message (`str(exc)`, not just its type name) -
+    matching Block 6's own cohort_tool.py pattern exactly
+    (genai-block6-multiagent/scripts/cohort_tool.py) - so the real failure
+    reason is preserved, not collapsed down to just "RuntimeError" or
+    "ClientError" with no detail on what actually went wrong.
+
     `retryable` distinguishes a temporary problem (a database/driver
     failure) from bad input (an invalid patient ID, or an unrecognized
     lab/comparison) - a bad-input failure won't be fixed by trying again,
     so the agent's retry loop checks this flag before retrying (see
-    docs/spec.md's Agent steps), same as RAGServiceError.
+    docs/spec.md's Agent steps), same as RAGServiceError. For a caught
+    driver/query exception, this is decided by classify_exception - never
+    just defaulted to True - so an unexpected, permanent failure (a Cypher
+    syntax error, for instance) doesn't get retried 3 times for no reason.
     """
 
     def __init__(self, detail: str, retryable: bool = True):
@@ -142,6 +163,13 @@ def count_drugs(
             )
             drug_counts = {row["drug"]: row["patient_count"] for row in count_rows}
     except Exception as exc:
-        raise GraphServiceError(type(exc).__name__)
+        # Preserve the real error message (not just the exception's type
+        # name) so it reaches the final caveat text, and only mark this
+        # retryable when classify_exception says it's a real infra issue -
+        # never for a bug or bad input, which retrying can't fix. Matches
+        # Block 6's own cohort_tool.py pattern exactly
+        # (genai-block6-multiagent/scripts/cohort_tool.py).
+        error_kind = classify_exception(exc)
+        raise GraphServiceError(str(exc), retryable=error_kind in _RETRYABLE_ERROR_KINDS)
 
     return {"drug_counts": drug_counts, "patients_checked": len(verified_ids)}

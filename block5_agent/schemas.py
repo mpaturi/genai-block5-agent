@@ -244,7 +244,9 @@ class AgentState(TypedDict):
     graph_error_retryable: bool
     graph_retry_count: int
     answer_error: Optional[str]
+    answer_error_retryable: bool
     answer_retry_count: int
     final_answer: Optional[dict]
     count_step_ran: bool
     outcome: Optional[str]
+    plausibility_flags: list[str]

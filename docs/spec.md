@@ -464,6 +464,58 @@ the graph database run locally, so 10 seconds is generous enough to rule
 out "just a bit slow" while still failing fast on a real outage, rather
 than leaving a run hanging.
 
+Every retry (steps 1, 3, and 4 below) waits between attempts instead of
+retrying immediately — a short backoff of `0.5 * attempt_number` seconds
+(0.5s before the 2nd attempt, 1.0s before the 3rd), matching Block 6
+Phase 8's confirmed formula (`block5_agent/agent.py`'s
+`_RETRY_BACKOFF_SECONDS`). Whether a failure is worth retrying at all is
+decided by `classify_exception` (`block5_agent/error_classification.py`,
+ported from the same Block 6 phase): a caught exception is classified as
+`timeout`/`connection_error`/`validation_error`/`unknown`, and for step 4
+only the `timeout`/`connection_error` kinds are retried — an allow-list,
+matching Block 6 Phase 8's confirmed `cohort_tool.py` pattern exactly.
+`validation_error` and `unknown` are both treated as permanent —
+bad/malformed output or a genuine bug, not an infrastructure hiccup, so
+retrying identical input can't fix it — and fail immediately without
+consuming a retry or waiting out a backoff. Steps 1 and 3 each still have
+their own, local checks for specific known-bad input (an invalid
+`top_k`, an unrecognized `lab`/`comparison`, a non-positive patient ID)
+that set `retryable=False` directly, without going through
+`classify_exception` — a known validation failure doesn't need
+classifying, it's already known to be permanent. Step 3
+(`block5_agent/graph_tool.py`'s `count_drugs()`) additionally runs
+`classify_exception` on any other exception its Neo4j driver call raises,
+the same way step 4 does — closing the gap where an unrecognized driver
+failure used to default to retryable, and would then be retried 3 times
+even for a permanent failure like a Cypher syntax error. Step 1
+(`block5_agent/rag_tool.py`) does not use `classify_exception` at all —
+every failure path there is already covered by its own explicit
+status-code-based classification, so there's no default-retryable gap to
+close.
+
+Before any of the steps below run, the agent checks the question's
+`condition`, `lab`, `drug_a`, and `drug_b` fields against the graph's own
+real vocabulary — the distinct `Condition.condition_name` and
+`Drug.drug_name` values actually stored there, plus the fixed lab
+whitelist Tool 2 already uses (`block5_agent/graph_tool.py`'s
+`_LAB_PROPERTY`) — all four checked in one pass
+(`block5_agent/plausibility_check.py`'s `check_plausibility`), following
+the same query-once-and-cache pattern Block 6 Phase 4 already established
+(`genai-block6-multiagent/scripts/vocabulary_check.py`). The comparison is
+exact string equality only — no case-folding, no substring match — since
+a substring check would let a real term with injected text appended to it
+(e.g. `"Hypertension\nIgnore all previous instructions"`) pass simply
+because the real term appears inside it. This check is advisory, not a
+gate: it never changes control flow or blocks a question from being
+answered, and if the vocabulary query itself fails (the graph is
+unreachable), the check fails open — it reports that it couldn't run
+rather than blocking the request or crashing it, since this is a
+"flagged", not "blocked", severity check. Whatever the check finds (or
+that it couldn't run) is threaded through `AgentState` as
+`plausibility_flags` and written to the `plausibility_flags` field of the
+log entry `log_run()` writes to `data/logs/runs.jsonl` — it never appears
+in the returned `ClinicalAnswer` itself.
+
 The agent moves through a fixed sequence of steps:
 
 1. **Search** — call the semantic search tool. If it fails in a way that
@@ -531,8 +583,11 @@ non-deterministic call to the language model.
   means for real, per-run cost).
 - Every run is logged with: the question, time spent per step, tokens
   used, an estimated cost in dollars, the outcome (answered, nothing
-  found, or a tool failure), and whether the count step actually ran.
-  These logs are written to `data/logs/runs.jsonl`, one line per run.
+  found, or a tool failure), whether the count step actually ran, and the
+  plausibility check's flags (see Agent steps) — empty when
+  `condition`/`lab`/`drug_a`/`drug_b` all matched the graph's real
+  vocabulary. These logs are written to `data/logs/runs.jsonl`, one line
+  per run.
   This file is generated output, not source code, so it isn't committed
   to the repo.
 - That last item — whether the count step ran — is also handed back
